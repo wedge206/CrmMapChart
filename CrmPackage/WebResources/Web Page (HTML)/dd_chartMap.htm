@@ -1,0 +1,481 @@
+<html>
+<head>
+    <title>Locations on Bing Maps</title>
+
+    <script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
+    <script type="text/javascript" src="dd_chartMapConfig.js"></script>
+
+    <script type="text/javascript">
+
+        var chartId = "";
+        var config = {};
+        var attributeList = {};
+        var searchManager = null;
+        var map = null;
+        var clusterLayer, heatLayer, infobox;
+        var allPins = [];
+        var completed, total;
+
+        var pinData = function (name, id, address, entitytype, latitude, longitude) {
+            this.Name = name;
+            this.Id = id;
+            this.Address = address;
+            this.EntityType = entitytype;
+            this.latitude = latitude;
+            this.longitude = longitude;
+        };
+
+        function getPinData(entityType, entities) {
+            var i = -1;
+            completed = 0;
+            total = entities.length;
+            while (i++ < entities.length - 1) {
+
+                var attributes = parseAttributes(entities[i]);
+                var searchString = attributes.address.join(", ");
+                var displayAddress = searchString;
+                var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
+
+                if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
+                    userData.multiplier = attributes.numericValue * (1 / config.Weight);
+                }
+
+                geocodeRequest(searchString, userData);
+            }
+        }
+
+        function parseAttributes(entity) {
+            var attributes = {};
+            attributes.address = [];
+            var attributePairs, formattedValues;
+
+            if (typeof entity.getElementsByTagNameNS != "undefined") {
+                attributePairs = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "KeyValuePairOfstringanyType");
+                formattedValues = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "FormattedValues")[0].getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "KeyValuePairOfstringstring");
+                attributes.id = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "Id")[0].textContent;
+            }
+            else {
+                attributes.id = entity.getElementsByTagName("a:Id")[0].text;
+                attributePairs = entity.getElementsByTagName("a:KeyValuePairOfstringanyType");
+                formattedValues = entity.getElementsByTagName("a:FormattedValues");
+            }
+            //debugger;
+            for (var i in attributeList.address) {  // Using this loop we lose control of the order of elements in the array.  Some browsers/versions may treat this differently.  But so far seems ok.
+                var value = getValue(attributeList.address[i], attributePairs, formattedValues);
+                if (value) {
+                    attributes.address.push(value);
+                }
+            }
+
+            attributes.accountName = getValue(attributeList.name, attributePairs);
+            attributes.numericValue = Number(getValue(config.IntensityField, attributePairs));
+
+            return attributes;
+        }
+
+        function getValue(keyName, attributePairs, formattedValues) {
+            for (var i = 0; i < attributePairs.length; i++) {
+                if (attributePairs[i].childNodes[0].textContent == keyName) {
+
+                    if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:EntityReference")
+                        return attributePairs[i].childNodes[1].childNodes[2].textContent;
+
+                    else if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:OptionSetValue") {
+                        for (var i in formattedValues) {
+                            if (formattedValues[i].childNodes[0].textContent == keyName)
+                                return formattedValues[i].childNodes[1].textContent;
+                        }
+                    }
+
+                    else if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:AliasedValue") {
+                        return attributePairs[i].childNodes[1].childNodes[2].textContent;
+                    }
+
+                    else
+                        return attributePairs[i].childNodes[1].textContent;
+                }
+                else if (attributePairs[i].childNodes[0].text == keyName) {
+                    //TODO add ie8 support for optionsets and lookups
+                    return attributePairs[i].childNodes[1].text;
+                }
+            }
+            return null;
+        }
+
+        function createSearchManager() {
+            if (!searchManager) {
+                map.addComponent('searchManager', new Microsoft.Maps.Search.SearchManager(map));
+                searchManager = map.getComponent('searchManager');
+            }
+        }
+
+        function geocodeRequest(searchString, userData) {
+            createSearchManager();
+            var request =
+            {
+                where: searchString,
+                count: 1,
+                bounds: map.getBounds(),
+                callback: onGeocodeSuccess,
+                errorCallback: onGeocodeFail,
+                userData: userData
+            };
+            searchManager.geocode(request);
+        }
+
+        function onGeocodeSuccess(result, userData) {
+            if (result) {
+                var topResult = result.results && result.results[0];
+                if (topResult) {
+                    userData.latitude = topResult.location.latitude;
+                    userData.longitude = topResult.location.longitude;
+
+                    allPins.push(userData);
+                }
+            }
+            completed += 1;
+            geocodeComplete();
+        }
+
+        function onGeocodeFail(result, userData) {
+            completed += 1;
+            geocodeComplete();
+        }
+
+        function geocodeComplete() {
+            if (completed == total) {
+                if (config.MapType == 1)
+                    clusterLayer.SetData(allPins);
+                else if (config.MapType == 2) {
+                    heatLayer.SetPoints(allPins);
+                }
+
+                map.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(allPins) });
+            }
+        }
+
+        function onComplete() {
+            
+        }
+
+        function createPin(data, clusterInfo) {
+            var pin = {};
+            pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { typeName: config.PinSize });
+
+            pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center,
+            {
+                title: data.Name,
+                pushpin: pin.pin,
+                description: data.Address,
+                titleClickHandler: function () {
+                    Xrm.Utility.openEntityForm(data.EntityType, data.Id, null);
+                }
+            });
+
+            return pin;
+        }
+
+        function createClusteredPin(clusterInfo) {
+            var pin = {};
+            pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() });
+
+            var description = "";
+            for (var i in clusterInfo.dataIndices) {
+                description += '<a href="javascript:Xrm.Utility.openEntityForm(&quot;' + allPins[clusterInfo.dataIndices[i]].EntityType + '&quot;,&quot;' + allPins[clusterInfo.dataIndices[i]].Id + '&quot;, null);">' + allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
+            }
+
+            pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center,
+            {
+                title: config.ClusterTitle,
+                pushpin: pin.pin,
+                description: description,
+            });
+
+            return pin;
+        }
+
+        function loadRecords(entity) {
+
+            try {
+                var fetchString;
+                if (parent.effectiveFetchXml) {
+                    fetchString = parent.effectiveFetchXml.getAttribute("value");  // Browser
+                }
+                else {
+                    fetchString = parent.$find("crmGrid").GetParameter("effectiveFetchXml");  // Outlook
+                }
+
+                var fetchXML;
+
+                if (window.DOMParser) {
+                    var parser = new DOMParser();
+                    fetchXML = parser.parseFromString(fetchString, "text/xml");
+
+                    while (fetchXML.getElementsByTagName("attribute").length > 0) {
+                        if (fetchXML.getElementsByTagName("attribute")[0].parentNode == fetchXML.firstChild.firstChild) {
+                            fetchXML.getElementsByTagName("attribute")[0].parentNode.removeChild(fetchXML.getElementsByTagName("attribute")[0]);
+                        }
+                        else {
+                            fetchXML.firstChild.firstChild.removeChild(fetchXML.getElementsByTagName("attribute")[0].parentNode);
+                        }
+                    }
+                }
+                else { //Older Internet Explorer -- Not currently working
+                    fetchXML = new ActiveXObject("Microsoft.XMLDOM");
+                    fetchXML.async = false;
+                    fetchXML.loadXML(fetchString);
+
+                    //var filterXML = fetchXML.selectNodes("//filter");
+                    //var orderXML = fetchXML.selectNodes("//order");
+
+                    //for (var k = 0; k < filterXML.length; k++) {
+                    //    filterText += filterXML[k].xml;
+                    //}
+                    //for (var j = 0; j < orderXML.length; j++) {
+                    //    orderText += orderXML[j].xml;
+                    //}
+                }
+
+                var myfetchXml = (new XMLSerializer()).serializeToString(fetchXML);
+
+                myfetchXml = myfetchXml.substr(0, myfetchXml.indexOf("</entity>")) + config.fetchattributes + myfetchXml.substr(myfetchXml.indexOf("</entity>"));
+
+                ExecuteFetchXmlRequest(myfetchXml, function (response) {
+                    if (typeof response.getElementsByTagNameNS !== "undefined") {
+                        getPinData(entity, response.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "Entity"));
+                    }
+                    else {
+                        getPinData(entity, response.getElementsByTagName("a:Entity"));
+                    }
+
+                }, function (error) {
+                });
+            }
+            catch (err) {
+                // Don't do anything.  Just display an empty map.
+            }
+        }
+
+        function ExecuteFetchXmlRequest(requestXml, successCallback, errorCallback) {
+            var requestMain = ""
+            requestMain += "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\">";
+            requestMain += "  <s:Body>";
+            requestMain += "    <Execute xmlns=\"http://schemas.microsoft.com/xrm/2011/Contracts/Services\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">";
+            requestMain += "      <request i:type=\"a:RetrieveMultipleRequest\" xmlns:a=\"http://schemas.microsoft.com/xrm/2011/Contracts\">";
+            requestMain += "        <a:Parameters xmlns:b=\"http://schemas.datacontract.org/2004/07/System.Collections.Generic\">";
+            requestMain += "          <a:KeyValuePairOfstringanyType>";
+            requestMain += "            <b:key>Query</b:key>";
+            requestMain += "            <b:value i:type=\"a:FetchExpression\">";
+            requestMain += "              <a:Query>" + encodeXml(requestXml) + "</a:Query>";
+            requestMain += "            </b:value>";
+            requestMain += "          </a:KeyValuePairOfstringanyType>";
+            requestMain += "        </a:Parameters>";
+            requestMain += "        <a:RequestId i:nil=\"true\" />";
+            requestMain += "        <a:RequestName>RetrieveMultiple</a:RequestName>";
+            requestMain += "      </request>";
+            requestMain += "    </Execute>";
+            requestMain += "  </s:Body>";
+            requestMain += "</s:Envelope>";
+
+            var req = new XMLHttpRequest();
+            req.open("POST", GetGlobalContext().getClientUrl() + "/XRMServices/2011/Organization.svc/web", true)
+            req.setRequestHeader("Accept", "application/xml, text/xml, */*");
+            req.setRequestHeader("Content-Type", "text/xml; charset=utf-8");
+            req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute");
+
+            req.onreadystatechange = function () {
+                if (req.readyState == 4) {
+                    if (req.status == 200) {
+                        if (successCallback != null) {
+                            successCallback(req.responseXML);
+                        }
+                    }
+                    else {
+                        errorCallback(req);
+                    }
+                }
+            };
+            req.send(requestMain);
+        }
+
+        function encodeXml(strInput) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(strInput));
+
+            return div.innerHTML;
+        }
+
+        function getParametersFromQuery(query) {
+            var parametersDictionary = new Array();
+            var parameters = query.split('&');
+            for (var i = 0; i < parameters.length; i++) {
+                var keyAndValue = parameters[i].split('=');
+                parametersDictionary[unescape(keyAndValue[0])] = unescape(keyAndValue[1]);
+            }
+            return parametersDictionary;
+        }
+
+        function loadMap() {
+            var parameters = getParametersFromQuery(window.location.search.substring(1));
+            var dataParam = getParametersFromQuery(parameters["data"]);
+            chartId = dataParam["visid"];
+            loadAttributeList(parameters["typename"]);
+
+            Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', {
+                callback: function () {
+                    var mapOptions =
+                    {
+                        credentials: config.BingKey,
+                        enableClickableLogo: false,
+                        showDashboard: false,
+                        enableSearchLogo: false,
+                        theme: new Microsoft.Maps.Themes.BingTheme()
+                    }
+
+                    map = new Microsoft.Maps.Map(document.getElementById("mapDiv"), mapOptions);
+                    map.setView({ zoom: config.Zoom, center: new Microsoft.Maps.Location(config.CenterLat, config.CenterLong) })
+                    Microsoft.Maps.loadModule('Microsoft.Maps.Search', {
+                        callback: function () {
+                            createSearchManager();
+
+                            if (config.MapType == 1) {
+                                Microsoft.Maps.registerModule("PointBasedClusteringModule", "dd_PointBasedClustering.min.js");
+                                Microsoft.Maps.loadModule("PointBasedClusteringModule", {
+                                    callback: function () {
+
+                                        var clusterRadius;
+                                        if (config.EnableClustering && config.MapType == 1)
+                                            clusterRadius = config.ClusterRadius;
+                                        else
+                                            clusterRadius = -1;
+
+                                        clusterLayer = new PointBasedClusteredEntityCollection(map, {
+                                            singlePinCallback: createPin,
+                                            clusteredPinCallback: createClusteredPin,
+                                            clusterRadius: clusterRadius,
+                                            callback: onComplete
+                                        });
+
+                                        loadRecords(parameters["typename"]);
+                                    }
+                                });
+                            }
+                            else if (config.MapType == 2) {
+                                Microsoft.Maps.registerModule("HeatMapModule", "dd_HeatMapModule.js");
+                                Microsoft.Maps.loadModule("HeatMapModule", {
+                                    callback: function () {
+                                        heatLayer = new HeatMapLayer(
+                                                                map,
+                                                                [],
+                                                                {
+                                                                    intensity: config.Intensity,
+                                                                    radius: config.Radius,
+                                                                    unit: config.RadiusUnits,
+                                                                    colourgradient: {
+                                                                        "0.00": config.Colour1,
+                                                                        "0.25": config.Colour2,
+                                                                        "0.50": config.Colour3,
+                                                                        "0.75": config.Colour4,
+                                                                        "1.00": config.Colour5
+                                                                    },
+                                                                    callback: onComplete
+                                                                });
+
+                                        loadRecords(parameters["typename"]);
+                                    }
+                                });
+                            }
+                        }           
+                    })
+                }
+            });
+        }
+
+        function loadAttributeList(entityType) {
+            var requestQuery = Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/dd_chartmapentitySet?$select=*&$filter=dd_chartid eq '" + chartId + "'&$top=1";
+            var req = new XMLHttpRequest();
+            req.open("GET", requestQuery, false);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.onreadystatechange = function () {
+                if (this.readyState == 4 /* complete */) {
+                    req.onreadystatechange = null;
+                    if (this.status == 200) {
+                        //   debugger;
+                        result = JSON.parse(this.responseText).d.results[0];
+                        attributeList.name = result.dd_NameField;
+                        attributeList.namelinkentity = result.dd_NameFieldLinkEntity;
+                        attributeList.address = {};
+                        attributeList.address["address"] = result.dd_AddressField;
+                        attributeList.address["city"] = result.dd_CityField;
+                        attributeList.address["state"] = result.dd_StateProvinceField;
+                        attributeList.address["postcode"] = result.dd_PostalCodeField;
+                        attributeList.address["country"] = result.dd_CountryField;
+                        attributeList.linkentity = {};
+                        attributeList.linkentity["address"] = result.dd_AddressFieldLinkEntity;
+                        attributeList.linkentity["city"] = result.dd_CityFieldLinkEntity;
+                        attributeList.linkentity["state"] = result.dd_StateProvinceFieldLinkEntity;
+                        attributeList.linkentity["postcode"] = result.dd_PostalCodeFieldLinkEntity;
+                        attributeList.linkentity["country"] = result.dd_CountryFieldLinkEntity;
+
+                        config.fetchattributes = result.dd_FetchAttributes;
+                        config.MapType = result.dd_MapType.Value;
+                        if (config.MapType == 1) {
+                            config.EnableClustering = result.dd_EnableClustering;
+                            config.ClusterRadius = result.dd_ClusterRadius;
+                            config.ClusterTitle = result.dd_ClusterName;
+                            config.PinSize = result.dd_PinSize.Value == 2 ? "micro" : "standard";
+                        }
+
+                        if (config.MapType == 2) {
+                            config.HeatMapType = result.dd_HeatMapBasedOn.Value;
+                            config.Intensity = result.dd_Intensity;
+                            config.IntensityField = result.dd_NumericField;
+                            config.Weight = result.dd_Weight;
+                            config.intensityfieldlinkentity = result.dd_NumericFieldLinkEntity;
+                            config.Radius = result.dd_Radius;
+                            config.RadiusUnits = result.dd_RadiusUnits ? "meters" : "pixels";
+                            config.Colour1 = getRGBValue(result.dd_ColourStop1.Value, "20");
+                            config.Colour2 = getRGBValue(result.dd_ColourStop2.Value, "40");
+                            config.Colour3 = getRGBValue(result.dd_ColourStop3.Value, "80");
+                            config.Colour4 = getRGBValue(result.dd_ColourStop4.Value, "120");
+                            config.Colour5 = getRGBValue(result.dd_ColourStop5.Value, "150");
+                        }
+                    }
+                    else {
+                        //error
+                    }
+                }
+            };
+
+            req.send();
+        }
+
+        function getRGBValue(colourValue, a) {
+                var value1 = colourValue.toString().substring(1, 4);
+                var value2 = colourValue.toString().substring(4, 7);
+                var value3 = colourValue.toString().substring(7, 10);
+
+                return 'rgba(' + value1 + ',' + value2 + ',' + value3 + ',' + a + ')';
+        }
+
+        function init() {
+            config = JSON.parse(configJSON);
+
+            var protocol = config.SSL == "1" ? "https://" : "http://";
+
+            var bingMapScriptUrl = protocol + "ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=7.0&mkt=" + config.Lang + "&s=" + config.SSL + "&onscriptload=loadMap";
+
+            var bingMapScript = document.createElement('script')
+            bingMapScript.setAttribute("type", "text/javascript")
+            bingMapScript.setAttribute("src", bingMapScriptUrl)
+
+            document.body.appendChild(bingMapScript);
+        }
+    </script>
+</head>
+<body onload="init()" style="overflow: hidden;">
+    <div class="MicrosoftMap BingTheme MapTypeId_m medium" id="mapDiv">
+    </div>
+</body>
+</html>
