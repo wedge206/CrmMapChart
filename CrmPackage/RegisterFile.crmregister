@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Register xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://schemas.microsoft.com/crm/2011/tools/pluginregistration">
+  <Solutions>
+    <Solution Assembly="CrmChartMap.CrmChartMapPlugin.dll" Id="0717275f-fdaf-e311-991b-6c3be5a8517c" IsolationMode="Sandbox" SourceType="Database">
+      <PluginTypes>
+        <Plugin Description="Plug-in to PostChartMapEntityCreate" FriendlyName="PostChartMapEntityCreate" Name="CrmChartMap.CrmChartMapPlugin.PostChartMapEntityCreate" Id="b1bafeae-fdaf-e311-991b-6c3be5a8517c" TypeName="CrmChartMap.CrmChartMapPlugin.PostChartMapEntityCreate">
+          <Steps>
+            <clear />
+            <Step CustomConfiguration="" Name="CrmChartMap.PostChartMapEntityCreate" Description="Post-Operation of Chart Map Entity Create" Id="6def1985-5ab2-e311-991b-6c3be5a8517c" MessageName="Create" Mode="Asynchronous" PrimaryEntityName="dd_chartmapentity" Rank="1" SecureConfiguration="" Stage="PostOutsideTransaction" SupportedDeployment="ServerOnly">
+              <Images>
+                <Image EntityAlias="PostImage" Id="90431b44-6bb9-e311-a0bc-6c3be5a8c0e8" MessagePropertyName="id" ImageType="PostImage" />
+              </Images>
+            </Step>
+            <Step CustomConfiguration="" Name="CrmChartMap.PostChartMapEntityUpdate" Description="Post-Operation of Chart Map Entity Update" FilteringAttributes="dd_addressfield,dd_cityfield,dd_countryfield,dd_namefield,dd_numericfield,dd_postalcodefield,dd_stateprovincefield" Id="789f062b-72b9-e311-a0bc-6c3be5a8c0e8" MessageName="Update" Mode="Asynchronous" PrimaryEntityName="dd_chartmapentity" Rank="1" SecureConfiguration="" Stage="PostOutsideTransaction" SupportedDeployment="ServerOnly">
+              <Images>
+                <Image EntityAlias="PostImage" Id="7b9f062b-72b9-e311-a0bc-6c3be5a8c0e8" MessagePropertyName="Target" ImageType="PostImage" />
+              </Images>
+            </Step>
+            <Step CustomConfiguration="" Name="CrmChartMap.PostChartMapEntityDelete" Description="Post-Operation of Chart Map Entity Delete" Id="70ef1985-5ab2-e311-991b-6c3be5a8517c" MessageName="Delete" Mode="Asynchronous" PrimaryEntityName="dd_chartmapentity" Rank="1" SecureConfiguration="" Stage="PostOutsideTransaction" SupportedDeployment="ServerOnly">
+              <Images>
+                <Image Attributes="dd_chartid" EntityAlias="PreImage" Id="73ef1985-5ab2-e311-991b-6c3be5a8517c" MessagePropertyName="Target" ImageType="PreImage" />
+              </Images>
+            </Step>
+            <Step CustomConfiguration="" Name="CrmChartMap.PostPublishAll" Description="Post-Operation of Publish All" Id="74ef1985-5ab2-e311-991b-6c3be5a8517c" MessageName="PublishAll" Mode="Asynchronous" PrimaryEntityName="none" Rank="1" SecureConfiguration="" Stage="PostOutsideTransaction" SupportedDeployment="ServerOnly">
+              <Images />
+            </Step>
+          </Steps>
+        </Plugin>
+        <Plugin Description="Plug-in to PreChartMapEntityCreate" FriendlyName="PreChartMapEntityCreate" Name="CrmChartMap.CrmChartMapPlugin.PreChartMapEntityCreate" Id="1dfa89fc-e1b3-e311-991b-6c3be5a8517c" TypeName="CrmChartMap.CrmChartMapPlugin.PreChartMapEntityCreate">
+          <Steps>
+            <clear />
+            <Step CustomConfiguration="" Name="PreChartMapEntityCreate" Description="Pre-Operation of Chart Map Entity Create" Id="1efa89fc-e1b3-e311-991b-6c3be5a8517c" MessageName="Create" Mode="Synchronous" PrimaryEntityName="dd_chartmapentity" Rank="1" SecureConfiguration="" Stage="PreInsideTransaction" SupportedDeployment="ServerOnly">
+              <Images />
+            </Step>
+            <Step CustomConfiguration="" Name="PreChartMapEntityUpdate" Description="Pre-Operation of Chart Map Entity Update" Id="3b391b44-e2b3-e311-991b-6c3be5a8517c" MessageName="Update" Mode="Synchronous" PrimaryEntityName="dd_chartmapentity" Rank="1" SecureConfiguration="" Stage="PreInsideTransaction" SupportedDeployment="ServerOnly">
+              <Images />
+            </Step>
+          </Steps>
+        </Plugin>
+      </PluginTypes>
+    </Solution>
+  </Solutions>
+  <XamlWorkflows />
+</Register>

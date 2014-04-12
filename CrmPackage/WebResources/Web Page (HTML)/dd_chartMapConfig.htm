@@ -1,0 +1,240 @@
+<html>
+<head>
+    <title>Chart Map Configuration</title>
+
+    <script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
+    <script type="text/javascript" src="dd_chartMapConfig.js"></script>
+    <script type="text/javascript">
+        var config = {};
+
+        function init() {
+            if (configJSON) {
+                config = JSON.parse(configJSON);
+
+                document.getElementById("bingkey").value = config.BingKey;
+                document.getElementById("clustering").checked = config.EnableClustering;
+                document.getElementById("radius").value = config.ClusterRadius;
+                document.getElementById("zoom").value = config.Zoom;
+                document.getElementById("centerlat").value = config.CenterLat;
+                document.getElementById("centerlong").value = config.CenterLong;
+                document.getElementById("ssl").checked = config.SSL == "1" ? true : false;
+                document.getElementById("lang").value = config.Lang;
+
+                if (!config.ConfigId) {
+                    getConfigId();
+                }
+            }
+            else {
+                config = {};
+            }
+        }
+
+        function onSaveClick() {
+
+            config.BingKey = document.getElementById("bingkey").value;
+            config.EnableClustering = document.getElementById("clustering").checked;
+            config.ClusterRadius = parseInt(document.getElementById("radius").value);
+            config.Zoom = parseInt(document.getElementById("zoom").value);
+            config.CenterLat = parseFloat(document.getElementById("centerlat").value);
+            config.CenterLong = parseFloat(document.getElementById("centerlong").value);
+            config.SSL = document.getElementById("ssl").checked ? "1" : "0";
+            config.Lang = document.getElementById("lang").value;
+
+            if (configJSON) {
+
+                var configJS = {};
+                var updatedConfig = "var configJSON = '" + JSON.stringify(config) + "';";
+
+                configJS.Content = encode64(updatedConfig);
+
+                updateConfigFile(config.ConfigId, configJS);
+            }
+            else {
+                config.Published = false;
+                config.ConfigId = "";
+
+                var configJS = {};
+                var updatedConfig = "var configJSON = '" + JSON.stringify(config) + "';";
+
+                configJS.Content = encode64(updatedConfig);
+
+                configJS.Name = "dd_chartMapConfig.js";
+                configJS.DisplayName = "dd_chartMapConfig.js";
+                configJS.WebResourceType = {};
+                configJS.WebResourceType.Value = 3;
+
+                createConfigFile(configJS);
+            }
+        }
+
+        function updateConfigFile(id, object) {
+            var req = new XMLHttpRequest();
+
+            req.open("POST", encodeURI(Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/WebResourceSet(guid'" + id + "')"), true);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("X-HTTP-Method", "MERGE");
+            req.onreadystatechange = function () {
+                if (this.readyState == 4 /* complete */) {
+                    req.onreadystatechange = null;
+                    if (this.status == 204 || this.status == 1223) {
+                        alert("Configuration saved.\nYou must Publish Customizations for changes to take effect.");
+                    }
+                    else {
+                        //debugger;
+                        var error;
+                        try {
+                            var response = JSON.parse(this.responseText);
+                            if (response.error) {
+                                if (response.error.message) {
+                                    if (response.error.message.value) {
+                                        error = response.error.message.value;
+                                    }
+                                    else {
+                                        error = response.error.message;
+                                    }
+                                }
+                                else {
+                                    error = response.error;
+                                }
+                            }
+                            else {
+                                error = response;
+                            }
+                        }
+                        catch (exception) {
+                            error = this.responseText;
+                        }
+
+                        alert("Error saving changes:\n\n" + error);
+                    }
+                }
+            };
+            req.send(JSON.stringify(object));
+        }
+
+        function createConfigFile(object) {
+
+            var req = new XMLHttpRequest();
+            req.open("POST", encodeURI(Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/WebResourceSet"), true);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.onreadystatechange = function () {
+                if (this.readyState == 4 /* complete */) {
+                    req.onreadystatechange = null;
+                    if (this.status == 201) {
+                        alert("Configuration saved.  You must Publish Customizations for changes to take effect.");
+                    }
+                    else {
+                        var innerException = JSON.parse(this.responseText).error.message.value;
+                        alert("Error saving changes:\n\n" + innerException);
+                    }
+                }
+            };
+            req.send(JSON.stringify(object));
+        }
+
+        function getConfigId() {
+            var requestQuery = Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/WebResourceSet?$select=*&$filter=Name eq 'dd_chartMapConfig.js'&$top=1";
+            var req = new XMLHttpRequest();
+            req.open("GET", requestQuery, false);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.onreadystatechange = function () {
+                if (this.readyState == 4 /* complete */) {
+                    req.onreadystatechange = null;
+                    if (this.status == 200) {
+                        var result = JSON.parse(req.responseText).d.results[0];
+                        config.ConfigId = result.WebResourceId;
+                    }
+                    else {
+                        //error
+                    }
+                }
+            };
+            req.send();
+        }
+
+        function encode64(input) {
+            var keyStr = "ABCDEFGHIJKLMNOP" +
+                       "QRSTUVWXYZabcdef" +
+                       "ghijklmnopqrstuv" +
+                       "wxyz0123456789+/" +
+                       "=";
+
+            var output = "";
+            var chr1, chr2, chr3 = "";
+            var enc1, enc2, enc3, enc4 = "";
+            var i = 0;
+
+            do {
+                chr1 = input.charCodeAt(i++);
+                chr2 = input.charCodeAt(i++);
+                chr3 = input.charCodeAt(i++);
+
+                enc1 = chr1 >> 2;
+                enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+                enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+                enc4 = chr3 & 63;
+
+                if (isNaN(chr2)) {
+                    enc3 = enc4 = 64;
+                } else if (isNaN(chr3)) {
+                    enc4 = 64;
+                }
+
+                output = output +
+                   keyStr.charAt(enc1) +
+                   keyStr.charAt(enc2) +
+                   keyStr.charAt(enc3) +
+                   keyStr.charAt(enc4);
+                chr1 = chr2 = chr3 = "";
+                enc1 = enc2 = enc3 = enc4 = "";
+            } while (i < input.length);
+
+            return output;
+        }
+    </script>
+
+</head>
+<body onload="init()" style="overflow: hidden;">
+    Bing Maps Key: <input id="bingkey" type="text" value=""><br />
+    Enable Pin Clustering: <input id="clustering" type="checkbox" /> Clustering Radius: <input id="radius" type="number" value="" /><br />
+    Default Map Zoom Level (1 - 19): <input id="zoom" type="number" value="" /><br />
+    Default Center Coordinates, Lat: <input id="centerlat" type="text" value="" /> Long: <input id="centerlong" type="text" value="" /><br />
+    Use SSL: <input id="ssl" type="checkbox" /><br />
+    Map Language/Region: <select id="lang">
+        <option value="cs-CZ">Czech - Czech Republic</option>
+        <option value="da-DK">Danish - Denmark</option>
+        <option value="nl-BE">Dutch - Belgium</option>
+        <option value="nl-NL">Dutch - Netherlands</option>
+        <option value="en-AU">English - Australia</option>
+        <option value="en-CA">English - Canada</option>
+        <option value="en-IN">English - India</option>
+        <option value="en-GB">English - United Kingdom</option>
+        <option value="en-US">English - United States</option>
+        <option value="fi-FI">Finnish - Finland</option>
+        <option value="fr-BE">French - Belgium</option>
+        <option value="fr-CA">French - Canada</option>
+        <option value="fr-CH">French - Switzerland</option>
+        <option value="fr-FR">French - France</option>
+        <option value="de-DE">German - Germany</option>
+        <option value="it-IT">Italian - Italy</option>
+        <option value="ja-JP">Japanese - Japan</option>
+        <option value="Ko-KR">Korean - Korea</option>
+        <option value="nb-NO">Norwegian - Norway</option>
+        <option value="pl-PL">Polish - Poland</option>
+        <option value="pt-BR">Portuguese - Brazil</option>
+        <option value="pt-PT">Portuguese - Portugal</option>
+        <option value="ru-RU">Russian - Russia</option>
+        <option value="es-MX">Spanish - Mexico</option>
+        <option value="es-ES">Spanish - Spain</option>
+        <option value="es-US">Spanish - United States</option>
+        <option value="sv-SE">Swedish - Sweden</option>
+        <option value="zh-HK">Chinese - Hong Kong</option>
+        <option value="zh-TW">Chinese - Taiwan</option>
+    </select>
+    <br />
+    <input id="submit" onclick="onSaveClick()" type="button" value="Save">
+</body>
+</html>
