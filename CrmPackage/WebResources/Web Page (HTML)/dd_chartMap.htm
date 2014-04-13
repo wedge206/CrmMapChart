@@ -37,7 +37,8 @@
                 var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
 
                 if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
-                    userData.multiplier = attributes.numericValue * (1 / config.Weight);
+                    //userData.multiplier = attributes.numericValue * (1 / config.Weight);
+                    userData.weight = attributes.numericValue;
                 }
 
                 geocodeRequest(searchString, userData);
@@ -147,6 +148,14 @@
                 if (config.MapType == 1)
                     clusterLayer.SetData(allPins);
                 else if (config.MapType == 2) {
+                    if (config.HeatMapType && config.HeatMapType == 2) {
+                        allPins.Range = config.IntensityRange;
+                    }
+                    else {
+                        allPins.Range = 0;
+                    }
+
+                    findMaxMin();
                     heatLayer.SetPoints(allPins);
                 }
 
@@ -155,7 +164,82 @@
         }
 
         function onComplete() {
-            
+
+        }
+
+        function findMaxMin() {
+            if (allPins.Range == 1) {
+                var weightArray = [];
+                for (var i = 0; i < allPins.length; i++) {
+                    weightArray.push(allPins[i].weight);
+                }
+
+                allPins.Max = 0;
+                for (var i = 0; i < allPins.length; i++) {
+                    if (allPins[i].weight > allPins.Max) {
+                        allPins.Max = allPins[i].weight;
+                    }
+                }
+
+                allPins.Min = allPins.Max;
+                for (var i = 0; i < allPins.length; i++) {
+                    if (allPins[i].weight < allPins.Min) {
+                        allPins.Min = allPins[i].weight;
+                    }
+                }
+
+                if (config.IntensityCalculation == 2) {
+                    
+                    var STDev = getStandardDeviation(weightArray, 2);
+                    var Mean = getAverageFromNumArr(weightArray, 2);
+                    var Deviations = 1;
+
+                    if (config.Deviations && config.Deviations > 0)
+                        Deviations = config.Deviations;
+
+                    if (Mean + (STDev * Deviations) < allPins.Max)
+                        allPins.Max = Mean + STDev;
+
+                    if (Mean - (STDev * Deviations) > allPins.Min)
+                        allPins.Min = Mean - STDev;
+                }
+
+                if (allPins.Min < 0) {
+                    allPins.Min = 0;
+                }
+            }
+            else {
+                allPins.Max = config.MaxValue;
+                allPins.Min = config.MinValue;
+            }
+        }
+
+        function getNumWithSetDec(num, numOfDec) {
+            var pow10s = Math.pow(10, numOfDec || 0);
+            return (numOfDec) ? Math.round(pow10s * num) / pow10s : num;
+        }
+        function getAverageFromNumArr(numArr, numOfDec) {
+            var i = numArr.length,
+                sum = 0;
+            while (i--) {
+                sum += numArr[i];
+            }
+            return getNumWithSetDec((sum / numArr.length), numOfDec);
+        }
+        function getVariance(numArr, numOfDec) {
+            var avg = getAverageFromNumArr(numArr, numOfDec),
+                i = numArr.length,
+                v = 0;
+
+            while (i--) {
+                v += Math.pow((numArr[i] - avg), 2);
+            }
+            v /= numArr.length;
+            return getNumWithSetDec(v, numOfDec);
+        }
+        function getStandardDeviation(numArr, numOfDec) {
+            var stdDev = Math.sqrt(getVariance(numArr, numOfDec));
+            return getNumWithSetDec(stdDev, numOfDec);
         }
 
         function createPin(data, clusterInfo) {
@@ -385,7 +469,7 @@
                                     }
                                 });
                             }
-                        }           
+                        }
                     })
                 }
             });
@@ -431,6 +515,11 @@
                             config.HeatMapType = result.dd_HeatMapBasedOn.Value;
                             config.Intensity = result.dd_Intensity;
                             config.IntensityField = result.dd_NumericField;
+                            config.IntensityRange = result.dd_IntensityRange.Value;
+                            config.IntensityCalculation = result.dd_IntensityCalculation.Value;
+                            config.Deviations = result.dd_Deviations;
+                            config.MaxValue = parseFloat(result.dd_MaximumValue);
+                            config.MinValue = parseFloat(result.dd_MinimumValue);
                             config.Weight = result.dd_Weight;
                             config.intensityfieldlinkentity = result.dd_NumericFieldLinkEntity;
                             config.Radius = result.dd_Radius;
@@ -452,11 +541,11 @@
         }
 
         function getRGBValue(colourValue, a) {
-                var value1 = colourValue.toString().substring(1, 4);
-                var value2 = colourValue.toString().substring(4, 7);
-                var value3 = colourValue.toString().substring(7, 10);
+            var value1 = colourValue.toString().substring(1, 4);
+            var value2 = colourValue.toString().substring(4, 7);
+            var value3 = colourValue.toString().substring(7, 10);
 
-                return 'rgba(' + value1 + ',' + value2 + ',' + value3 + ',' + a + ')';
+            return 'rgba(' + value1 + ',' + value2 + ',' + value3 + ',' + a + ')';
         }
 
         function init() {
