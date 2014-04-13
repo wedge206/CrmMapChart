@@ -180,22 +180,31 @@ var HeatMapLayer = function (map, locations, options) {
             var x = pixloc.x;
             var y = pixloc.y;
 
-            // Use location multiplier against the radius, if one exists:
-            var weightedRadius = null;
-            if (loc.multiplier != null && loc.multiplier > 0) {
-                weightedRadius = loc.multiplier * radiusInPixel;
-            } else {
-                weightedRadius = radiusInPixel;
+            if (_locations.Range && _locations.Range > 0) {
+                var intensity = ((loc.weight - _locations.Min) / (_locations.Max - _locations.Min)).toFixed(2);
+                if (intensity <= 0)
+                    intensity = 0.01;
+                if (intensity > 1)
+                    intensity = 1;
+                shadow = 'rgba(0, 0, 0, ' + intensity + ')';
             }
 
+            // Use location multiplier against the radius, if one exists:
+            //var weightedRadius = null;
+            //if (loc.multiplier != null && loc.multiplier > 0) {
+            //    weightedRadius = loc.multiplier * radiusInPixel;
+            //} else {
+            //    weightedRadius = radiusInPixel;
+            //}
+
             // Create radial gradient centred on this point
-            var grd = ctx.createRadialGradient(x, y, 0, x, y, weightedRadius);
+            var grd = ctx.createRadialGradient(x, y, 0, x, y, radiusInPixel);
             grd.addColorStop(0.0, shadow);
             grd.addColorStop(1.0, 'transparent');
 
             // Draw the heatpoint onto the canvas
             ctx.fillStyle = grd;
-            ctx.fillRect(x - weightedRadius, y - weightedRadius, 2 * weightedRadius, 2 * weightedRadius);
+            ctx.fillRect(x - radiusInPixel, y - radiusInPixel, 2 * radiusInPixel, 2 * radiusInPixel);
         }
 
         // Apply the specified colour gradient to the intensity map
