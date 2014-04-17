@@ -60,7 +60,7 @@
                 attributePairs = entity.getElementsByTagName("a:KeyValuePairOfstringanyType");
                 formattedValues = entity.getElementsByTagName("a:FormattedValues");
             }
-            //debugger;
+
             for (var i in attributeList.address) {  // Using this loop we lose control of the order of elements in the array.  Some browsers/versions may treat this differently.  But so far seems ok.
                 var value = getValue(attributeList.address[i], attributePairs, formattedValues);
                 if (value) {
@@ -189,7 +189,7 @@
                 }
 
                 if (config.IntensityCalculation == 2) {
-                    
+
                     var STDev = getStandardDeviation(weightArray, 2);
                     var Mean = getAverageFromNumArr(weightArray, 2);
                     var Deviations = 1;
@@ -264,8 +264,25 @@
             pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() });
 
             var description = "";
+            var serverUrl = "";
+
+            if (Xrm.Page.context.getClientUrl)
+                serverUrl = Xrm.Page.context.getClientUrl();
+            else
+                serverUrl = Xrm.Page.context.getServerUrl();
+
+            if (serverUrl.match(/\/$/)) {
+                serverUrl = serverUrl.substring(0, serverUrl.length - 1);
+            }
+
             for (var i in clusterInfo.dataIndices) {
-                description += '<a href="javascript:Xrm.Utility.openEntityForm(&quot;' + allPins[clusterInfo.dataIndices[i]].EntityType + '&quot;,&quot;' + allPins[clusterInfo.dataIndices[i]].Id + '&quot;, null);">' + allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
+                if (Xrm.Utility.openEntityForm) {
+                    var scriptLink = "javascript:Xrm.Utility.openEntityForm('" + allPins[clusterInfo.dataIndices[i]].EntityType + "','" + allPins[clusterInfo.dataIndices[i]].Id + "', null);";
+                    description += '<a href="#" onclick="' + scriptLink + '">' + allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
+                }
+                else {
+                    description += '<a href="' + serverUrl + '/main.aspx?etn=' + allPins[clusterInfo.dataIndices[i]].EntityType + '&pagetype=entityrecord&id=%7B' + allPins[clusterInfo.dataIndices[i]].Id + '%7D" target="_blank">' + allPins[clusterInfo.dataIndices[i]].Name + '</a><br />';
+                }
             }
 
             pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center,
