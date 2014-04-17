@@ -252,7 +252,20 @@
                 pushpin: pin.pin,
                 description: data.Address,
                 titleClickHandler: function () {
-                    Xrm.Utility.openEntityForm(data.EntityType, data.Id, null);
+                    if (Xrm.Utility.openEntityForm)
+                        Xrm.Utility.openEntityForm(data.EntityType, data.Id, null);
+                    else {
+                        if (Xrm.Page.context.getClientUrl)
+                            serverUrl = Xrm.Page.context.getClientUrl();
+                        else
+                            serverUrl = Xrm.Page.context.getServerUrl();
+
+                        if (serverUrl.match(/\/$/)) {
+                            serverUrl = serverUrl.substring(0, serverUrl.length - 1);
+                        }
+
+                        window.open(serverUrl + '/main.aspx?etn=' + data.EntityType + '&pagetype=entityrecord&id=%7B' + data.Id + '%7D');
+                    }
                 }
             });
 
