@@ -101,7 +101,6 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "datadescription", Target.GetAttributeValue<string>("dd_entity") },
                         { "presentationdescription", Target.GetAttributeValue<string>("dd_entity") },
                         { "webresourceid", chartMapReference },
-                        { "solutionid", Guid.Parse("fd140aae-4df4-11dd-bd17-0019b9312238") },
                         { "isdefault", false}
                     }
                 };
@@ -109,9 +108,8 @@ namespace CrmChartMap.CrmChartMapPlugin
                 Guid chartId = Service.Create(newChart);
                 tracingService.Trace("New chart created sucessfully with id: {0}", chartId.ToString());
 
-                Entity updatedTarget = new Entity("dd_chartmapentity");
-                updatedTarget.Id = Target.Id;
-                updatedTarget["dd_chartid"] = chartId.ToString("B").ToUpper();  // Can't have relationship with charts, so we have to store the guid as a string, boo...
+                Entity updatedTarget = new Entity("dd_chartmapentity") { Id = Target.Id };
+                updatedTarget["dd_chartid"] = chartId.ToString("B").ToUpper();  // Can't have relationships with charts, so we have to store the guid as a string, boo...
                 updatedTarget["dd_fetchattributes"] = BuildFetch();
 
                 Service.Update(updatedTarget);
@@ -120,8 +118,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 
             public void RunUpdate()
             {
-                Entity updatedTarget = new Entity("dd_chartmapentity");
-                updatedTarget.Id = Target.Id;
+                Entity updatedTarget = new Entity("dd_chartmapentity") { Id = Target.Id };
                 updatedTarget["dd_fetchattributes"] = BuildFetch();
 
                 Service.Update(updatedTarget);
@@ -133,20 +130,18 @@ namespace CrmChartMap.CrmChartMapPlugin
                 List<string> fieldList = new List<string>() { "dd_namefield", "dd_cityfield", "dd_addressfield", "dd_postalcodefield", "dd_stateprovincefield", "dd_countryfield", "dd_numericfield" };
                 List<attribute> attributeList = new List<attribute>();
 
-                foreach (string value in fieldList)
+                foreach (string value in fieldList.Where(f => !string.IsNullOrWhiteSpace(PostImage.GetAttributeValue<string>(f))))
                 {
-                    string fieldValue = PostImage.GetAttributeValue<string>(value);
-                    if (!String.IsNullOrWhiteSpace(fieldValue))
+                    string fieldValue = PostImage.GetAttributeValue<string>(value);  // Use the post image, to insure that we have all the values
+
+                    if (fieldValue.Contains("."))
                     {
-                        if (fieldValue.Contains("."))
-                        {
-                            string[] values = fieldValue.Split('.');
-                            attributeList.Add(new attribute(values[1], values[0], PostImage.GetAttributeValue<string>(value + "linkentity")));
-                        }
-                        else
-                        {
-                            attributeList.Add(new attribute(fieldValue));
-                        }
+                        string[] values = fieldValue.Split('.');
+                        attributeList.Add(new attribute(values[1], values[0], PostImage.GetAttributeValue<string>(value + "linkentity")));
+                    }
+                    else
+                    {
+                        attributeList.Add(new attribute(fieldValue));
                     }
                 }
 
@@ -204,7 +199,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 
             public void Run()
             {
-                tracingService.Trace("Beginning PostDelete.  Chart Id: {0}", PreImage["dd_chartid"]);
+                tracingService.Trace("Beginning PostDelete.  Chart Id: {0}", PreImage["dd_chartid"].ToString());
                 Guid chartId;
 
                 if (Guid.TryParse((string)PreImage["dd_chartid"], out chartId))
@@ -214,7 +209,6 @@ namespace CrmChartMap.CrmChartMapPlugin
                 }
                 else
                 {
-                    tracingService.Trace("Failed to parse Id.  Chart not deleted");
                     throw new InvalidPluginExecutionException("Failed to parse Id.  Chart not deleted");
                 }
             }
@@ -222,7 +216,6 @@ namespace CrmChartMap.CrmChartMapPlugin
 
         protected class PostPublishAll
         {
-
             private IOrganizationService Service;
             private ITracingService tracingService;
             private OrganizationServiceContext dataContext;
@@ -270,8 +263,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                     string chartMapConfig = getConfigContent(chartMapConfigRecord);
                     tracingService.Trace("Existing chartMapConfig found: {0}", chartMapConfig);
 
-                    if (chartMapConfig.IndexOf("\"Published\":true") > -1)
-                        isPublished = true;
+                    isPublished = chartMapConfig.IndexOf("\"Published\":true") > -1;
 
                     setConfigIdIfNone(chartMapConfigRecord);
 
@@ -295,18 +287,18 @@ namespace CrmChartMap.CrmChartMapPlugin
                     tracingService.Trace("Solution has already been published.");
                 }
 
-                // Remove this plugin step after the first time it runs sucessfully
+                // Remove this plugin step after the first time it runs successfully
                 deletePluginStep();
             }
 
             private void PublishConfig(Guid ConfigId)
             {
-                OrganizationRequest request = new OrganizationRequest { RequestName = "PublishXml" };
+                OrganizationRequest request = new OrganizationRequest
+                {
+                    RequestName = "PublishXml",
+                    Parameters = new ParameterCollection() { new KeyValuePair<string, object>("ParameterXml", string.Format("<importexportxml><webresources><webresource>{0}</webresource></webresources></importexportxml>", ConfigId.ToString())) }
+                };
 
-                request.Parameters = new ParameterCollection();
-                request.Parameters.Add(new KeyValuePair<string, object>("ParameterXml",
-                string.Format("<importexportxml><webresources><webresource>{0}</webresource></webresources></importexportxml>", ConfigId.ToString())));
-                
                 Service.Execute(request);
             }
 
@@ -385,6 +377,9 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "dd_countryfield", country },
                         { "dd_heatmapbasedon", new OptionSetValue(intensityfactor) },
                         { "dd_numericfield", numericfield},
+                        { "dd_intensityrange", new OptionSetValue(1) },
+                        { "dd_intensitycalculation", new OptionSetValue(1) },
+                        { "dd_deviations", 2.0 },
                         { "dd_weight", weight },
                         { "dd_intensity", intensity},
                         { "dd_radius", radius},
