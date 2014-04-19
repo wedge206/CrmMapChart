@@ -34,7 +34,7 @@ function maptype_onChange() {
         else if (intensityType == 2) {
             fixed = false;
             calculated = true;
-            
+
             if (Xrm.Page.getAttribute("dd_intensityrange").getValue() == 2) {
                 fixed = true;
             }
@@ -84,9 +84,17 @@ function maptype_onChange() {
 
         if (Xrm.Page.getAttribute("dd_intensityrange").getValue() == 2) {
             Xrm.Page.getControl("dd_intensitycalculation").setDisabled(true);
+            Xrm.Page.getControl("dd_deviations").setDisabled(true);
         }
         else {
             Xrm.Page.getControl("dd_intensitycalculation").setDisabled(false);
+
+            if (Xrm.Page.getAttribute("dd_intensitycalculation").getValue() == 2) {
+                Xrm.Page.getControl("dd_deviations").setDisabled(false);
+            }
+            else {
+                Xrm.Page.getControl("dd_deviations").setDisabled(true);
+            }
         }
     }
 }
