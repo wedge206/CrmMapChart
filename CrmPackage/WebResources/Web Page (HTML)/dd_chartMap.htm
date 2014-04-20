@@ -37,7 +37,6 @@
                 var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
 
                 if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
-                    //userData.multiplier = attributes.numericValue * (1 / config.Weight);
                     userData.weight = attributes.numericValue;
                 }
 
