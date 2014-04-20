@@ -277,7 +277,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                     CreateChartConfig("account", "Account Locations", "name", "Displays Account locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Accounts");
                     CreateChartConfig("contact", "Contact Locations", "fullname", "Displays Contact locations on a Bing Map", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Contacts");
                     CreateChartConfig("lead", "Lead Locations", "fullname", "Displays Lead locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Leads");
-                    CreateHeatMap("opportunity", "Estimated Value Heat Map", "name", "Displays heat map of Estimated Value by Parent Account address", "parentaccountid.address1_city", "parentaccountid.address1_line1", "parentaccountid.address1_postalcode", "parentaccountid.address1_stateorprovince", "parentaccountid.address1_country", 2, "estimatedvalue", 1000000, (decimal)0.5, 900, false, 1128000128, 1000000255, 1000128000, 1255255000, 1255000000);
+                    CreateHeatMap("opportunity", "Estimated Value Heat Map", "name", "Displays heat map of Estimated Value by Parent Account address", "parentaccountid.address1_city", "parentaccountid.address1_line1", "parentaccountid.address1_postalcode", "parentaccountid.address1_stateorprovince", "parentaccountid.address1_country", 2, "estimatedvalue", 1000000, 0.5m, 50, false, 1128000128, 1000000255, 1000128000, 1255255000, 1255000000);
                     tracingService.Trace("Predefined maps created sucessfully");
 
                     setPublishedFlag(chartMapConfigRecord);
@@ -344,7 +344,7 @@ namespace CrmChartMap.CrmChartMapPlugin
             private void deletePluginStep()
             {
                 tracingService.Trace("Deleting PublishAll plugin step");
-                var stepId = dataContext.CreateQuery("sdkmessageprocessingstep").Where(s => (string)s["name"] == "CrmChartMap.PostPublishAll").Select(s => s.Id).SingleOrDefault();
+                var stepId = dataContext.CreateQuery("sdkmessageprocessingstep").Where(s => s.GetAttributeValue<string>("name") == "CrmChartMap.PostPublishAll").Select(s => s.Id).SingleOrDefault();
 
                 Service.Delete("sdkmessageprocessingstep", stepId);
                 tracingService.Trace("PublishAll step sucessfully deleted");
