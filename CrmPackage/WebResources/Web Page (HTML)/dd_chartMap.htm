@@ -314,8 +314,15 @@
                 if (parent.effectiveFetchXml) {
                     fetchString = parent.effectiveFetchXml.getAttribute("value");  // Browser
                 }
-                else {
+                else if (parent.$find("crmGrid")) {
                     fetchString = parent.$find("crmGrid").GetParameter("effectiveFetchXml");  // Outlook
+                }
+                else  // Gets the FetchXml from the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered view results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards.
+                {
+                    var parameters = getParametersFromQuery(window.location.search.substring(1));
+                    var dataParam = getParametersFromQuery(parameters["data"]);
+                    var viewId = dataParam["viewid"];
+                    fetchString = GetFetchXmlFromViewId(viewId);
                 }
 
                 var fetchXML;
@@ -365,7 +372,40 @@
                 });
             }
             catch (err) {
-                // Don't do anything.  Just display an empty map.
+                ShowRenderError();  // Show a friendly error to the user :)
+            }
+        }
+
+        function ShowRenderError() {
+            map.entities.clear();
+
+            var newElement = document.createElement("div");
+            newElement.style.cssText = "position:absolute; width:100%; top:50%; text-Align:center";
+
+            var innerElement = document.createElement("div");
+            innerElement.innerHTML = "\u003ch2\u003eSorry :(\u003c/h2\u003eThere was an error rendering the data for this map.\u003cbr/\u003ePlease contact your system administrator";
+            innerElement.style.cssText = "background: #f8f7f5; padding:10px; color: #000;";
+            newElement.appendChild(innerElement);
+            map.getRootElement().appendChild(newElement);
+        }
+
+        function GetFetchXmlFromViewId(viewId) {
+            var req = new XMLHttpRequest();
+            req.open("GET", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/SavedQuerySet(guid'" + viewId + "')", false);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+
+            req.send();
+
+            if (req.readyState == 4 /* complete */) {
+                if (req.status == 200) {
+                    req.onreadystatechange = null; //avoids memory leaks
+
+                    return (JSON.parse(req.responseText).d).FetchXml;
+                }
+                else {
+                    //error
+                }
             }
         }
 
