@@ -311,7 +311,7 @@
 
             try {
                 var fetchString;
-                if (parent.effectiveFetchXml) {
+                if (parent.effectiveFetchXml && Object.prototype.toString.call(parent.effectiveFetchXml) == "[object HTMLDivElement]") {
                     fetchString = parent.effectiveFetchXml.getAttribute("value");  // Browser
                 }
                 else if (parent.$find("crmGrid")) {
