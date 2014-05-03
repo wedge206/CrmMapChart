@@ -200,9 +200,9 @@
 <body onload="init()" style="overflow: hidden;">
     Bing Maps Key: <input id="bingkey" type="text" value=""><br />
     Enable Pin Clustering: <input id="clustering" type="checkbox" /> Clustering Radius: <input id="radius" type="number" value="" /><br />
-    Default Map Zoom Level (1 - 19): <input id="zoom" type="number" value="" /><br />
+    Default Map Zoom Level (1 - 19): <input id="zoom" type="number" min="1" max="19" value="" /><br />
     Default Center Coordinates, Lat: <input id="centerlat" type="text" value="" /> Long: <input id="centerlong" type="text" value="" /><br />
-    Use SSL: <input id="ssl" type="checkbox" /><br />
+    Use SSL: <input id="ssl" type="checkbox" /> (Recommendation: Set this to match your CRM deployment.  So if you have CRM Online or IFD then turn it on, otherwise probably turn it off)<br />
     Map Language/Region: <select id="lang">
         <option value="cs-CZ">Czech - Czech Republic</option>
         <option value="da-DK">Danish - Denmark</option>
