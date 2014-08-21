@@ -496,16 +496,10 @@
                                 Microsoft.Maps.loadModule("PointBasedClusteringModule", {
                                     callback: function () {
 
-                                        var clusterRadius;
-                                        if (config.EnableClustering && config.MapType == 1)
-                                            clusterRadius = config.ClusterRadius;
-                                        else
-                                            clusterRadius = -1;
-
                                         clusterLayer = new PointBasedClusteredEntityCollection(map, {
                                             singlePinCallback: createPin,
                                             clusteredPinCallback: createClusteredPin,
-                                            clusterRadius: clusterRadius,
+                                            clusterRadius: config.EnableClustering ? config.ClusterRadius : -1,
                                             callback: onComplete
                                         });
 
