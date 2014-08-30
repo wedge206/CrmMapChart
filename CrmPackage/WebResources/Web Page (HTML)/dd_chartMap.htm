@@ -32,15 +32,23 @@
             while (i++ < entities.length - 1) {
 
                 var attributes = parseAttributes(entities[i]);
-                var searchString = attributes.address.join(", ");
-                var displayAddress = searchString;
-                var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
 
-                if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
-                    userData.weight = attributes.numericValue;
+                if (attributes.address[5] && attributes.address[6]) {  // We already have the coordinates
+                    allPins.push(new pinData(attributes.accountName, attributes.id, displayAddress, entityType, attributes.address[5], attributes.address[6]));
+                    completed += 1;
+                    geocodeComplete();
                 }
+                else {  // Must perform geocoding
+                    var searchString = attributes.address.join(", ");
+                    var displayAddress = searchString;
+                    var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
 
-                geocodeRequest(searchString, userData);
+                    if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
+                        userData.weight = attributes.numericValue;
+                    }
+
+                    geocodeRequest(searchString, userData);
+                }
             }
         }
 
@@ -131,6 +139,10 @@
                     userData.longitude = topResult.location.longitude;
 
                     allPins.push(userData);
+
+                    if (config.CacheCoordinates) {
+                        updateCoordinates(userData.Id, userData.EntityType, userData.longitude, userData.latitude)
+                    }
                 }
             }
             completed += 1;
@@ -160,6 +172,21 @@
 
                 map.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(allPins) });
             }
+        }
+
+        function updateCoordinates(id, entityType, longitude, latitude) {
+            var record = {};
+            record[attributeList.LatitudeField] = latitude;
+            record[attributeList.LongitudeField] = longitude;
+
+            var req = new XMLHttpRequest();
+            req.open("POST", encodeURI(GetGlobalContext().getClientUrl() + "/XRMServices/2011/OrganizationData.svc/" + attributeList.entitySchemaName + "Set(guid'" + id + "')"), true);
+            req.setRequestHeader("Accept", "application/json");
+            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
+            req.setRequestHeader("X-HTTP-Method", "MERGE");
+            // Don't bother checking the response.  No matter the result, there is no further action to perform at this time
+            
+            req.send(JSON.stringify(record));
         }
 
         function onComplete() {
@@ -550,6 +577,10 @@
                     if (this.status == 200) {
                         //   debugger;
                         result = JSON.parse(this.responseText).d.results[0];
+                        attributeList.entitySchemaName = result.dd_EntitySchemaName;
+                        attributeList.LatitudeField = result.dd_LatitudeSchemaName;
+                        attributeList.LongitudeField = result.dd_LongitudeSchemaName;
+
                         attributeList.name = result.dd_NameField;
                         attributeList.namelinkentity = result.dd_NameFieldLinkEntity;
                         attributeList.address = {};
@@ -558,6 +589,8 @@
                         attributeList.address["state"] = result.dd_StateProvinceField;
                         attributeList.address["postcode"] = result.dd_PostalCodeField;
                         attributeList.address["country"] = result.dd_CountryField;
+                        attributeList.address["latitude"] = result.dd_LatitudeField;
+                        attributeList.address["longitude"] = result.dd_LongitudeField;
                         attributeList.linkentity = {};
                         attributeList.linkentity["address"] = result.dd_AddressFieldLinkEntity;
                         attributeList.linkentity["city"] = result.dd_CityFieldLinkEntity;
@@ -567,6 +600,8 @@
 
                         config.fetchattributes = result.dd_FetchAttributes;
                         config.MapType = result.dd_MapType.Value;
+                        config.CacheCoordinates = result.dd_EnableCaching || false;
+
                         if (config.MapType == 1) {
                             config.EnableClustering = result.dd_EnableClustering;
                             config.ClusterRadius = result.dd_ClusterRadius;
