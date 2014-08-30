@@ -127,7 +127,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 
             private string BuildFetch()
             {
-                List<string> fieldList = new List<string>() { "dd_namefield", "dd_cityfield", "dd_addressfield", "dd_postalcodefield", "dd_stateprovincefield", "dd_countryfield", "dd_numericfield" };
+                List<string> fieldList = new List<string>() { "dd_namefield", "dd_cityfield", "dd_addressfield", "dd_postalcodefield", "dd_stateprovincefield", "dd_countryfield", "dd_numericfield", "dd_latitudefield", "dd_longitudefield"};
                 List<attribute> attributeList = new List<attribute>();
 
                 foreach (string value in fieldList.Where(f => !string.IsNullOrWhiteSpace(PostImage.GetAttributeValue<string>(f))))
@@ -274,10 +274,10 @@ namespace CrmChartMap.CrmChartMapPlugin
                 if (!isPublished)
                 {
                     tracingService.Trace("Creating predefined maps for Account,Contact,Lead and Opportunity entities");
-                    CreateChartConfig("account", "Account Locations", "name", "Displays Account locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Accounts");
-                    CreateChartConfig("contact", "Contact Locations", "fullname", "Displays Contact locations on a Bing Map", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Contacts");
-                    CreateChartConfig("lead", "Lead Locations", "fullname", "Displays Lead locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "Multiple Leads");
-                    CreateHeatMap("opportunity", "Estimated Value Heat Map", "name", "Displays heat map of Estimated Value by Parent Account address", "parentaccountid.address1_city", "parentaccountid.address1_line1", "parentaccountid.address1_postalcode", "parentaccountid.address1_stateorprovince", "parentaccountid.address1_country", 2, "estimatedvalue", 1000000, 0.5m, 50, false, 1128000128, 1000000255, 1000128000, 1255255000, 1255000000);
+                    CreateChartConfig("account", "Account Locations", "name", "Displays Account locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Accounts");
+                    CreateChartConfig("contact", "Contact Locations", "fullname", "Displays Contact locations on a Bing Map", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Contacts");
+                    CreateChartConfig("lead", "Lead Locations", "fullname", "Displays Lead locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Leads");
+                    CreateHeatMap("opportunity", "Estimated Value Heat Map", "name", "Displays heat map of Estimated Value by Parent Account address", "parentaccountid.address1_city", "parentaccountid.address1_line1", "parentaccountid.address1_postalcode", "parentaccountid.address1_stateorprovince", "parentaccountid.address1_country", "parentaccountid.address1_latitude", "parentaccountid.address1_longitude", 2, "estimatedvalue", 1000000, 0.5m, 50, false, 1128000128, 1000000255, 1000128000, 1255255000, 1255000000);
                     tracingService.Trace("Predefined maps created sucessfully");
 
                     setPublishedFlag(chartMapConfigRecord);
@@ -358,7 +358,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                 return Encoding.UTF8.GetString(rawContent);
             }
 
-            private void CreateHeatMap(string entityname, string entitydisplayname, string name, string description, string city, string address, string postcode, string province, string country, int intensityfactor, string numericfield, int weight, decimal intensity, int radius, bool meters, int colourstop1, int colourstop2, int colourstop3, int colourstop4, int colourstop5)
+            private void CreateHeatMap(string entityname, string entitydisplayname, string name, string description, string city, string address, string postcode, string province, string country, string latitude, string longitude, int intensityfactor, string numericfield, int weight, decimal intensity, int radius, bool meters, int colourstop1, int colourstop2, int colourstop3, int colourstop4, int colourstop5)
             {
                 tracingService.Trace("CreateChartConfig: Entity: {0}, DisplayName: {1}, Name: {2}, City: {3}, Address: {4}, PostCode: {5}, State: {6}, Country: {7}", entityname, entitydisplayname, name, city, address, postcode, province, country);
                 Entity newConfig = new Entity("dd_chartmapentity")
@@ -366,6 +366,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                     Attributes = new AttributeCollection 
                     { 
                         { "dd_entity", entityname },
+                        { "dd_enablecaching", false },
                         { "dd_maptype", new OptionSetValue(2) },
                         { "dd_chartname", entitydisplayname },
                         { "dd_chartdescription", description },
@@ -375,6 +376,8 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "dd_postalcodefield", postcode },
                         { "dd_stateprovincefield", province },
                         { "dd_countryfield", country },
+                        { "dd_latitudefield", latitude},
+                        { "dd_longitudefield", longitude},
                         { "dd_heatmapbasedon", new OptionSetValue(intensityfactor) },
                         { "dd_numericfield", numericfield},
                         { "dd_intensityrange", new OptionSetValue(1) },
@@ -395,7 +398,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                 Service.Create(newConfig);
             }
 
-            private void CreateChartConfig(string entityname, string entitydisplayname, string name, string description, string city, string address, string postcode, string province, string country, string clustertitle)
+            private void CreateChartConfig(string entityname, string entitydisplayname, string name, string description, string city, string address, string postcode, string province, string country, string latitude, string longitude, string clustertitle)
             {
                 tracingService.Trace("CreateChartConfig: Entity: {0}, DisplayName: {1}, Name: {2}, City: {3}, Address: {4}, PostCode: {5}, State: {6}, Country: {7}", entityname, entitydisplayname, name, city, address, postcode, province, country);
                 Entity newConfig = new Entity("dd_chartmapentity")
@@ -403,6 +406,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                     Attributes = new AttributeCollection 
                     { 
                         { "dd_entity", entityname },
+                        { "dd_enablecaching", false },
                         { "dd_maptype", new OptionSetValue(1) },
                         { "dd_chartname", entitydisplayname },
                         { "dd_chartdescription", description },
@@ -412,6 +416,8 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "dd_postalcodefield", postcode },
                         { "dd_stateprovincefield", province },
                         { "dd_countryfield", country },
+                        { "dd_latitudefield", latitude},
+                        { "dd_longitudefield", longitude},
                         { "dd_enableclustering", true },
                         { "dd_clusterradius", 30 },
                         { "dd_clustername", clustertitle },

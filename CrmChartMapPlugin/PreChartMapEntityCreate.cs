@@ -56,7 +56,10 @@ namespace CrmChartMap.CrmChartMapPlugin
             }
 
             PreChartMapCreate preCreate = new PreChartMapCreate(localContext);
-            preCreate.Run();
+            EntityMetadata metadata = preCreate.Run();
+            preCreate.UpdateSchemaNames(metadata);
+
+            preCreate.UpdateEntitySchemaName(metadata);
         }
 
         protected class PreChartMapCreate
@@ -76,9 +79,9 @@ namespace CrmChartMap.CrmChartMapPlugin
                 Target = localContext.PluginExecutionContext.InputParameters["Target"] as Entity;
             }
 
-            public void Run()
+            public EntityMetadata Run()
             {
-                List<string> fieldList = new List<string>() { "dd_namefield", "dd_cityfield", "dd_addressfield", "dd_postalcodefield", "dd_stateprovincefield", "dd_countryfield", "dd_numericfield" };
+                List<string> fieldList = new List<string>() { "dd_namefield", "dd_cityfield", "dd_addressfield", "dd_postalcodefield", "dd_stateprovincefield", "dd_countryfield", "dd_latitudefield", "dd_longitudefield", "dd_numericfield" };
 
                 tracingService.Trace("Getting MetaData");
 
@@ -89,6 +92,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                 {
                     if (Target.Contains(field))
                     {
+                        tracingService.Trace("Working on field: " + field);
                         string fieldValue = Target.GetAttributeValue<string>(field);
                         if (!String.IsNullOrWhiteSpace(fieldValue))
                         {
@@ -112,7 +116,7 @@ namespace CrmChartMap.CrmChartMapPlugin
                                     }
                                     else
                                     {
-                                        tracingService.Trace("lookup field is valid");
+                                        tracingService.Trace("Lookup field is valid");
                                         LookupAttributeMetadata lookupField = attributeData as LookupAttributeMetadata;
 
                                         string foundEntity = "";
@@ -127,13 +131,13 @@ namespace CrmChartMap.CrmChartMapPlugin
                                             }
                                         }
 
-                                        tracingService.Trace("found entity: " + foundEntity);
+                                        tracingService.Trace("Found entity: " + foundEntity);
                                         if (foundEntity == "")
                                         {
                                             throw new InvalidPluginExecutionException("Error: '" + values[1] + "' is not a valid field name");
                                         }
 
-                                        tracingService.Trace("updating target");
+                                        tracingService.Trace("Updating Target");
                                         Target[field + "linkentity"] = foundEntity;
                                     }
 
@@ -147,31 +151,76 @@ namespace CrmChartMap.CrmChartMapPlugin
                                     throw new InvalidPluginExecutionException("Error: '" + fieldValue + "' is not a valid field name");
                                 }
 
-                                tracingService.Trace("updating target");
+                                tracingService.Trace("Updating Target");
                                 Target[field + "linkentity"] = "";
                             }
                         }
                     }
                 }
+
+                tracingService.Trace("Completed Field Validation");
+
+                return entityData;
+            }
+
+            public void UpdateSchemaNames(EntityMetadata metaData)
+            {
+                tracingService.Trace("Updating schema names");
+                if (Target.Contains("dd_latitudefield"))
+                {
+                    if (!String.IsNullOrWhiteSpace(Target.GetAttributeValue<string>("dd_latitudefield")))
+                    {
+                        tracingService.Trace("Adding dd_latitudeschemaname to Target");
+                        Target["dd_latitudeschemaname"] = metaData.Attributes.Single(a => a.LogicalName == Target.GetAttributeValue<string>("dd_latitudefield")).SchemaName;
+                    }
+                    else
+                    {
+                        tracingService.Trace("Clearing dd_latitudeschemaname");
+                        Target["dd_latitudeschemaname"] = "";
+                    }
+                }
+
+
+                if (Target.Contains("dd_longitudefield"))
+                {
+                    if (!String.IsNullOrWhiteSpace(Target.GetAttributeValue<string>("dd_longitudefield")))
+                    {
+                        tracingService.Trace("Adding dd_longitudeschemaname to Target");
+                        Target["dd_longitudeschemaname"] = metaData.Attributes.SingleOrDefault(a => a.LogicalName == Target.GetAttributeValue<string>("dd_longitudefield")).SchemaName;
+                    }
+                    else
+                    {
+                        tracingService.Trace("Clearing dd_longitudeschemaname");
+                        Target["dd_longitudeschemaname"] = "";
+                    }
+                }
+
+                tracingService.Trace("Schema name update complete");
+            }
+
+            public void UpdateEntitySchemaName(EntityMetadata metaData)  // Only runs on Create
+            {
+                tracingService.Trace("Adding dd_entityschemaname to Target: " + metaData.SchemaName);
+                Target["dd_entityschemaname"] = metaData.SchemaName;
             }
 
             private EntityMetadata GetEntityMetaData(string entityName)
             {
                 RetrieveEntityRequest metadataRequest = new RetrieveEntityRequest();
                 metadataRequest.LogicalName = entityName;
-                metadataRequest.EntityFilters = EntityFilters.Attributes;
+                metadataRequest.EntityFilters = EntityFilters.Entity | EntityFilters.Attributes;
                 metadataRequest.RetrieveAsIfPublished = false;
 
                 try
                 {
-                    tracingService.Trace("getting metadata for " + entityName);
+                    tracingService.Trace("Getting metadata for " + entityName);
                     RetrieveEntityResponse entityResponse = (RetrieveEntityResponse)Service.Execute(metadataRequest);
 
                     return entityResponse.EntityMetadata;
                 }
                 catch (FaultException<OrganizationServiceFault> ex)
                 {
-                    tracingService.Trace("failed to get metadata");
+                    tracingService.Trace("Failed to get metadata");
                     throw new InvalidPluginExecutionException("Error: " + ex.Message);
                 }
             }

@@ -5,12 +5,27 @@
         Xrm.Page.getControl("dd_entity").setDisabled(true);
         Xrm.Page.getControl("dd_chartdescription").setDisabled(true);
     }
+    if (Xrm.Page.getAttribute("dd_enablecaching").getValue() == null) {
+        Xrm.Page.getAttribute("dd_enablecaching").setValue(false);
+    }
 
     maptype_onChange();
+    enableCaching_onChange();
 }
 
 function onSave() {
 
+}
+
+function enableCaching_onChange() {
+    if (Xrm.Page.getAttribute("dd_enablecaching").getValue() == true) {
+        Xrm.Page.getAttribute("dd_latitudefield").setRequiredLevel("required");
+        Xrm.Page.getAttribute("dd_longitudefield").setRequiredLevel("required");
+    }
+    else {
+        Xrm.Page.getAttribute("dd_latitudefield").setRequiredLevel("none");
+        Xrm.Page.getAttribute("dd_longitudefield").setRequiredLevel("none");
+    }
 }
 
 function maptype_onChange() {
