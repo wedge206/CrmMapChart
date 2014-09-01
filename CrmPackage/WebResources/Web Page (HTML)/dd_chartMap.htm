@@ -34,6 +34,7 @@
                 var attributes = parseAttributes(entities[i]);
 
                 if (attributes.address[5] && attributes.address[6]) {  // We already have the coordinates
+                    var displayAddress = attributes.address[0] + ", " + attributes.address[1] + ", " + attributes.address[2] + ", " + attributes.address[3] + ", " + attributes.address[4];
                     allPins.push(new pinData(attributes.accountName, attributes.id, displayAddress, entityType, attributes.address[5], attributes.address[6]));
                     completed += 1;
                     geocodeComplete();
