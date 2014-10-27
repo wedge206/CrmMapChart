@@ -66,7 +66,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 		{
 			byte[] rawContent = Convert.FromBase64String(configEntity.GetAttributeValue<string>("content"));
 
-			return Encoding.UTF8.GetString(rawContent).Remove(0, 17).TrimStart('\'').TrimEnd(';').ParseJSON<ChartMapConfig>();
+			return Encoding.UTF8.GetString(rawContent).Remove(0, 17).TrimStart('\'').TrimEnd('\'',';').ParseJSON<ChartMapConfig>();
 		}
 	}
 }
