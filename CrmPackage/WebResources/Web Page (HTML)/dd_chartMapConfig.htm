@@ -39,6 +39,7 @@
             config.CenterLong = parseFloat(document.getElementById("centerlong").value);
             config.SSL = document.getElementById("ssl").checked ? "1" : "0";
             config.Lang = document.getElementById("lang").value;
+            config.bingMapScriptUrl = (config.SSL == "1" ? "https://" : "http://") + "ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=7.0&mkt=" + config.Lang + "&s=" + config.SSL + "&onscriptload=loadMap";
 
             if (configJSON) {
 

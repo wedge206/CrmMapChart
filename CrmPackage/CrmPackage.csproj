@@ -54,6 +54,16 @@
       <UniqueName>dd_HeatMapModule.js</UniqueName>
       <WebResourceType>Script</WebResourceType>
     </CRMWebResource>
+    <CRMWebResource Include="WebResources\Script (JScript)\dd_RESTService.js">
+      <DisplayName>dd_RESTService.js</DisplayName>
+      <UniqueName>dd_RESTService.js</UniqueName>
+      <WebResourceType>Script</WebResourceType>
+    </CRMWebResource>
+    <CRMWebResource Include="WebResources\Script (JScript)\dd_XMLParser.js">
+      <DisplayName>dd_XMLParser.js</DisplayName>
+      <UniqueName>dd_XMLParser.js</UniqueName>
+      <WebResourceType>Script</WebResourceType>
+    </CRMWebResource>
     <CRMWebResource Include="WebResources\Script (JScript)\dd_chartMapEntityScript.js">
       <DisplayName>dd_chartMapEntityScript.js</DisplayName>
       <UniqueName>dd_chartMapEntityScript.js</UniqueName>

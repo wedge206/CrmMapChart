@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.30110.0
+VisualStudioVersion = 12.0.30723.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{88A30576-7583-4F75-8136-5EFD2C14ADFF}") = "CrmPackage", "CrmPackage\CrmPackage.csproj", "{AC9ED90E-480F-46FE-925A-9DD54E431741}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -15,10 +15,10 @@ Global
 		SccNumberOfProjects = 3
 		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
 		SccTeamFoundationServer = https://tfs.codeplex.com/tfs/tfs15
-		SccProjectUniqueName0 = CrmPackage\\CrmPackage.csproj
-		SccProjectName0 = CrmPackage
-		SccLocalPath0 = CrmPackage
-		SccLocalPath1 = .
+		SccLocalPath0 = .
+		SccProjectUniqueName1 = CrmPackage\\CrmPackage.csproj
+		SccProjectName1 = CrmPackage
+		SccLocalPath1 = CrmPackage
 		SccProjectUniqueName2 = CrmChartMapPlugin\\CrmChartMapPlugin.csproj
 		SccProjectName2 = CrmChartMapPlugin
 		SccLocalPath2 = CrmChartMapPlugin
