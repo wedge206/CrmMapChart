@@ -1,669 +1,385 @@
+﻿<!DOCTYPE html>
 <html>
 <head>
-    <title>Locations on Bing Maps</title>
-
-    <script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
-    <script type="text/javascript" src="dd_chartMapConfig.js"></script>
-
-    <script type="text/javascript">
-
-        var chartId = "";
-        var config = {};
-        var attributeList = {};
-        var searchManager = null;
-        var map = null;
-        var clusterLayer, heatLayer, infobox;
-        var allPins = [];
-        var completed, total;
-
-        var pinData = function (name, id, address, entitytype, latitude, longitude) {
-            this.Name = name;
-            this.Id = id;
-            this.Address = address;
-            this.EntityType = entitytype;
-            this.latitude = latitude;
-            this.longitude = longitude;
-        };
-
-        function getPinData(entityType, entities) {
-            var i = -1;
-            completed = 0;
-            total = entities.length;
-            while (i++ < entities.length - 1) {
-
-                var attributes = parseAttributes(entities[i]);
-
-                if (attributes.address[5] && attributes.address[6]) {  // We already have the coordinates
-                    var displayAddress = attributes.address[0] + ", " + attributes.address[1] + ", " + attributes.address[2] + ", " + attributes.address[3] + ", " + attributes.address[4];
-                    allPins.push(new pinData(attributes.accountName, attributes.id, displayAddress, entityType, attributes.address[5], attributes.address[6]));
-                    completed += 1;
-                    geocodeComplete();
-                }
-                else {  // Must perform geocoding
-                    var searchString = attributes.address.join(", ");
-                    var displayAddress = searchString;
-                    var userData = new pinData(attributes.accountName, attributes.id, displayAddress, entityType);
-
-                    if (config.HeatMapType == 2 && attributes.numericValue >= 0) {
-                        userData.weight = attributes.numericValue;
-                    }
-
-                    geocodeRequest(searchString, userData);
-                }
-            }
-        }
-
-        function parseAttributes(entity) {
-            var attributes = {};
-            attributes.address = [];
-            var attributePairs, formattedValues;
-
-            if (typeof entity.getElementsByTagNameNS != "undefined") {
-                attributePairs = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "KeyValuePairOfstringanyType");
-                formattedValues = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "FormattedValues")[0].getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "KeyValuePairOfstringstring");
-                attributes.id = entity.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "Id")[0].textContent;
-            }
-            else {
-                attributes.id = entity.getElementsByTagName("a:Id")[0].text;
-                attributePairs = entity.getElementsByTagName("a:KeyValuePairOfstringanyType");
-                formattedValues = entity.getElementsByTagName("a:FormattedValues");
-            }
-
-            for (var i in attributeList.address) {  // Using this loop we lose control of the order of elements in the array.  Some browsers/versions may treat this differently.  But so far seems ok.
-                var value = getValue(attributeList.address[i], attributePairs, formattedValues);
-                if (value) {
-                    attributes.address.push(value);
-                }
-            }
-
-            attributes.accountName = getValue(attributeList.name, attributePairs);
-            attributes.numericValue = Number(getValue(config.IntensityField, attributePairs));
-
-            return attributes;
-        }
-
-        function getValue(keyName, attributePairs, formattedValues) {
-            for (var i = 0; i < attributePairs.length; i++) {
-                if (attributePairs[i].childNodes[0].textContent == keyName) {
-
-                    if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:EntityReference")
-                        return attributePairs[i].childNodes[1].childNodes[2].textContent;
-
-                    else if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:OptionSetValue") {
-                        for (var i in formattedValues) {
-                            if (formattedValues[i].childNodes[0].textContent == keyName)
-                                return formattedValues[i].childNodes[1].textContent;
-                        }
-                    }
-
-                    else if (attributePairs[i].childNodes[1].getAttribute("i:type") == "a:AliasedValue") {
-                        return attributePairs[i].childNodes[1].childNodes[2].textContent;
-                    }
-
-                    else
-                        return attributePairs[i].childNodes[1].textContent;
-                }
-                else if (attributePairs[i].childNodes[0].text == keyName) {
-                    //TODO add ie8 support for optionsets and lookups
-                    return attributePairs[i].childNodes[1].text;
-                }
-            }
-            return null;
-        }
-
-        function createSearchManager() {
-            if (!searchManager) {
-                map.addComponent('searchManager', new Microsoft.Maps.Search.SearchManager(map));
-                searchManager = map.getComponent('searchManager');
-            }
-        }
-
-        function geocodeRequest(searchString, userData) {
-            createSearchManager();
-            var request =
-            {
-                where: searchString,
-                count: 1,
-                bounds: map.getBounds(),
-                callback: onGeocodeSuccess,
-                errorCallback: onGeocodeFail,
-                userData: userData
-            };
-            searchManager.geocode(request);
-        }
-
-        function onGeocodeSuccess(result, userData) {
-            if (result) {
-                var topResult = result.results && result.results[0];
-                if (topResult) {
-                    userData.latitude = topResult.location.latitude;
-                    userData.longitude = topResult.location.longitude;
-
-                    allPins.push(userData);
-
-                    if (config.CacheCoordinates) {
-                        updateCoordinates(userData.Id, userData.EntityType, userData.longitude, userData.latitude)
-                    }
-                }
-            }
-            completed += 1;
-            geocodeComplete();
-        }
-
-        function onGeocodeFail(result, userData) {
-            completed += 1;
-            geocodeComplete();
-        }
-
-        function geocodeComplete() {
-            if (completed == total) {
-                if (config.MapType == 1)
-                    clusterLayer.SetData(allPins);
-                else if (config.MapType == 2) {
-                    if (config.HeatMapType && config.HeatMapType == 2) {
-                        allPins.Range = config.IntensityRange;
-                    }
-                    else {
-                        allPins.Range = 0;
-                    }
-
-                    findMaxMin();
-                    heatLayer.SetPoints(allPins);
-                }
-
-                map.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(allPins) });
-            }
-        }
-
-        function updateCoordinates(id, entityType, longitude, latitude) {
-            var record = {};
-            record[attributeList.LatitudeField] = latitude;
-            record[attributeList.LongitudeField] = longitude;
-
-            var req = new XMLHttpRequest();
-            req.open("POST", encodeURI(GetGlobalContext().getClientUrl() + "/XRMServices/2011/OrganizationData.svc/" + attributeList.entitySchemaName + "Set(guid'" + id + "')"), true);
-            req.setRequestHeader("Accept", "application/json");
-            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
-            req.setRequestHeader("X-HTTP-Method", "MERGE");
-            // Don't bother checking the response.  No matter the result, there is no further action to perform at this time
-            
-            req.send(JSON.stringify(record));
-        }
-
-        function onComplete() {
-
-        }
-
-        function findMaxMin() {
-            if (allPins.Range == 1) {
-                var weightArray = [];
-                for (var i = 0; i < allPins.length; i++) {
-                    weightArray.push(allPins[i].weight);
-                }
-
-                allPins.Max = 0;
-                for (var i = 0; i < allPins.length; i++) {
-                    if (allPins[i].weight > allPins.Max) {
-                        allPins.Max = allPins[i].weight;
-                    }
-                }
-
-                allPins.Min = allPins.Max;
-                for (var i = 0; i < allPins.length; i++) {
-                    if (allPins[i].weight < allPins.Min) {
-                        allPins.Min = allPins[i].weight;
-                    }
-                }
-
-                if (config.IntensityCalculation == 2) {
-
-                    var STDev = getStandardDeviation(weightArray, 2);
-                    var Mean = getAverageFromNumArr(weightArray, 2);
-                    var Deviations = 1;
-
-                    if (config.Deviations && config.Deviations > 0)
-                        Deviations = config.Deviations;
-
-                    if (Mean + (STDev * Deviations) < allPins.Max)
-                        allPins.Max = Mean + STDev;
-
-                    if (Mean - (STDev * Deviations) > allPins.Min)
-                        allPins.Min = Mean - STDev;
-                }
-
-                if (allPins.Min < 0) {
-                    allPins.Min = 0;
-                }
-            }
-            else {
-                allPins.Max = config.MaxValue;
-                allPins.Min = config.MinValue;
-            }
-        }
-
-        function getNumWithSetDec(num, numOfDec) {
-            var pow10s = Math.pow(10, numOfDec || 0);
-            return (numOfDec) ? Math.round(pow10s * num) / pow10s : num;
-        }
-        function getAverageFromNumArr(numArr, numOfDec) {
-            var i = numArr.length,
-                sum = 0;
-            while (i--) {
-                sum += numArr[i];
-            }
-            return getNumWithSetDec((sum / numArr.length), numOfDec);
-        }
-        function getVariance(numArr, numOfDec) {
-            var avg = getAverageFromNumArr(numArr, numOfDec),
-                i = numArr.length,
-                v = 0;
-
-            while (i--) {
-                v += Math.pow((numArr[i] - avg), 2);
-            }
-            v /= numArr.length;
-            return getNumWithSetDec(v, numOfDec);
-        }
-        function getStandardDeviation(numArr, numOfDec) {
-            var stdDev = Math.sqrt(getVariance(numArr, numOfDec));
-            return getNumWithSetDec(stdDev, numOfDec);
-        }
-
-        function createPin(data, clusterInfo) {
-            var pin = {};
-            pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { typeName: config.PinSize });
-
-            pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center,
-            {
-                title: data.Name,
-                pushpin: pin.pin,
-                description: data.Address,
-                titleClickHandler: function () {
-                    if (Xrm.Utility.openEntityForm)
-                        Xrm.Utility.openEntityForm(data.EntityType, data.Id, null);
-                    else {
-                        if (Xrm.Page.context.getClientUrl)
-                            serverUrl = Xrm.Page.context.getClientUrl();
-                        else
-                            serverUrl = Xrm.Page.context.getServerUrl();
-
-                        if (serverUrl.match(/\/$/)) {
-                            serverUrl = serverUrl.substring(0, serverUrl.length - 1);
-                        }
-
-                        window.open(serverUrl + '/main.aspx?etn=' + data.EntityType + '&pagetype=entityrecord&id=%7B' + data.Id + '%7D');
-                    }
-                }
-            });
-
-            return pin;
-        }
-
-        function createClusteredPin(clusterInfo) {
-            var pin = {};
-            pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() });
-
-            var description = "";
-            var serverUrl = "";
-
-            if (Xrm.Page.context.getClientUrl)
-                serverUrl = Xrm.Page.context.getClientUrl();
-            else
-                serverUrl = Xrm.Page.context.getServerUrl();
-
-            if (serverUrl.match(/\/$/)) {
-                serverUrl = serverUrl.substring(0, serverUrl.length - 1);
-            }
-
-            for (var i in clusterInfo.dataIndices) {
-                if (Xrm.Utility.openEntityForm) {
-                    var scriptLink = "javascript:Xrm.Utility.openEntityForm('" + allPins[clusterInfo.dataIndices[i]].EntityType + "','" + allPins[clusterInfo.dataIndices[i]].Id + "', null);";
-                    description += '<a href="#" onclick="' + scriptLink + '">' + allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
-                }
-                else {
-                    description += '<a href="' + serverUrl + '/main.aspx?etn=' + allPins[clusterInfo.dataIndices[i]].EntityType + '&pagetype=entityrecord&id=%7B' + allPins[clusterInfo.dataIndices[i]].Id + '%7D" target="_blank">' + allPins[clusterInfo.dataIndices[i]].Name + '</a><br />';
-                }
-            }
-
-            pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center,
-            {
-                title: config.ClusterTitle,
-                pushpin: pin.pin,
-                description: description,
-            });
-
-            return pin;
-        }
-
-        function loadRecords(entity) {
-
-            try {
-                var fetchString;
-                if (parent.effectiveFetchXml && Object.prototype.toString.call(parent.effectiveFetchXml) == "[object HTMLDivElement]") {
-                    fetchString = parent.effectiveFetchXml.getAttribute("value");  // Browser
-                }
-                else if (parent.$find("crmGrid")) {
-                    fetchString = parent.$find("crmGrid").GetParameter("effectiveFetchXml");  // Outlook
-                }
-                else  // Gets the FetchXml from the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered view results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards.
-                {
-                    var parameters = getParametersFromQuery(window.location.search.substring(1));
-                    var dataParam = getParametersFromQuery(parameters["data"]);
-                    var viewId = dataParam["viewid"];
-                    fetchString = GetFetchXmlFromViewId(viewId);
-                }
-
-                var fetchXML;
-
-                if (window.DOMParser) {
-                    var parser = new DOMParser();
-                    fetchXML = parser.parseFromString(fetchString, "text/xml");
-
-                    while (fetchXML.getElementsByTagName("attribute").length > 0) {
-                        if (fetchXML.getElementsByTagName("attribute")[0].parentNode == fetchXML.firstChild.firstChild) {
-                            fetchXML.getElementsByTagName("attribute")[0].parentNode.removeChild(fetchXML.getElementsByTagName("attribute")[0]);
-                        }
-                        else {
-                            fetchXML.firstChild.firstChild.removeChild(fetchXML.getElementsByTagName("attribute")[0].parentNode);
-                        }
-                    }
-                }
-                else { //Older Internet Explorer -- Not currently working
-                    fetchXML = new ActiveXObject("Microsoft.XMLDOM");
-                    fetchXML.async = false;
-                    fetchXML.loadXML(fetchString);
-
-                    //var filterXML = fetchXML.selectNodes("//filter");
-                    //var orderXML = fetchXML.selectNodes("//order");
-
-                    //for (var k = 0; k < filterXML.length; k++) {
-                    //    filterText += filterXML[k].xml;
-                    //}
-                    //for (var j = 0; j < orderXML.length; j++) {
-                    //    orderText += orderXML[j].xml;
-                    //}
-                }
-
-                var myfetchXml = (new XMLSerializer()).serializeToString(fetchXML);
-
-                myfetchXml = myfetchXml.substr(0, myfetchXml.indexOf("</entity>")) + config.fetchattributes + myfetchXml.substr(myfetchXml.indexOf("</entity>"));
-
-                ExecuteFetchXmlRequest(myfetchXml, function (response) {
-                    if (typeof response.getElementsByTagNameNS !== "undefined") {
-                        getPinData(entity, response.getElementsByTagNameNS("http://schemas.microsoft.com/xrm/2011/Contracts", "Entity"));
-                    }
-                    else {
-                        getPinData(entity, response.getElementsByTagName("a:Entity"));
-                    }
-
-                }, function (error) {
-                });
-            }
-            catch (err) {
-                ShowRenderError();  // Show a friendly error to the user :)
-            }
-        }
-
-        function ShowRenderError() {
-            map.entities.clear();
-
-            var newElement = document.createElement("div");
-            newElement.style.cssText = "position:absolute; width:100%; top:50%; text-Align:center";
-
-            var innerElement = document.createElement("div");
-            innerElement.innerHTML = "\u003ch2\u003eSorry :(\u003c/h2\u003eThere was an error rendering the data for this map.\u003cbr/\u003ePlease contact your system administrator";
-            innerElement.style.cssText = "background: #f8f7f5; padding:10px; color: #000;";
-            newElement.appendChild(innerElement);
-            map.getRootElement().appendChild(newElement);
-        }
-
-        function GetFetchXmlFromViewId(viewId) {
-            var req = new XMLHttpRequest();
-            req.open("GET", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/SavedQuerySet(guid'" + viewId + "')", false);
-            req.setRequestHeader("Accept", "application/json");
-            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
-
-            req.send();
-
-            if (req.readyState == 4 /* complete */) {
-                if (req.status == 200) {
-                    req.onreadystatechange = null; //avoids memory leaks
-
-                    return (JSON.parse(req.responseText).d).FetchXml;
-                }
-                else {
-                    //error
-                }
-            }
-        }
-
-        function ExecuteFetchXmlRequest(requestXml, successCallback, errorCallback) {
-            var requestMain = ""
-            requestMain += "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\">";
-            requestMain += "  <s:Body>";
-            requestMain += "    <Execute xmlns=\"http://schemas.microsoft.com/xrm/2011/Contracts/Services\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">";
-            requestMain += "      <request i:type=\"a:RetrieveMultipleRequest\" xmlns:a=\"http://schemas.microsoft.com/xrm/2011/Contracts\">";
-            requestMain += "        <a:Parameters xmlns:b=\"http://schemas.datacontract.org/2004/07/System.Collections.Generic\">";
-            requestMain += "          <a:KeyValuePairOfstringanyType>";
-            requestMain += "            <b:key>Query</b:key>";
-            requestMain += "            <b:value i:type=\"a:FetchExpression\">";
-            requestMain += "              <a:Query>" + encodeXml(requestXml) + "</a:Query>";
-            requestMain += "            </b:value>";
-            requestMain += "          </a:KeyValuePairOfstringanyType>";
-            requestMain += "        </a:Parameters>";
-            requestMain += "        <a:RequestId i:nil=\"true\" />";
-            requestMain += "        <a:RequestName>RetrieveMultiple</a:RequestName>";
-            requestMain += "      </request>";
-            requestMain += "    </Execute>";
-            requestMain += "  </s:Body>";
-            requestMain += "</s:Envelope>";
-
-            var req = new XMLHttpRequest();
-            req.open("POST", GetGlobalContext().getClientUrl() + "/XRMServices/2011/Organization.svc/web", true)
-            req.setRequestHeader("Accept", "application/xml, text/xml, */*");
-            req.setRequestHeader("Content-Type", "text/xml; charset=utf-8");
-            req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute");
-
-            req.onreadystatechange = function () {
-                if (req.readyState == 4) {
-                    if (req.status == 200) {
-                        if (successCallback != null) {
-                            successCallback(req.responseXML);
-                        }
-                    }
-                    else {
-                        errorCallback(req);
-                    }
-                }
-            };
-            req.send(requestMain);
-        }
-
-        function encodeXml(strInput) {
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(strInput));
-
-            return div.innerHTML;
-        }
-
-        function getParametersFromQuery(query) {
-            var parametersDictionary = new Array();
-            var parameters = query.split('&');
-            for (var i = 0; i < parameters.length; i++) {
-                var keyAndValue = parameters[i].split('=');
-                parametersDictionary[unescape(keyAndValue[0])] = unescape(keyAndValue[1]);
-            }
-            return parametersDictionary;
-        }
-
-        function loadMap() {
-            var parameters = getParametersFromQuery(window.location.search.substring(1));
-            var dataParam = getParametersFromQuery(parameters["data"]);
-            chartId = dataParam["visid"];
-            loadAttributeList(parameters["typename"]);
-
-            Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', {
-                callback: function () {
-                    var mapOptions =
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<title>Locations on Bing Maps</title>
+	<script type="text/javascript" src="dd_XMLParser.js" async></script>
+	<script type="text/javascript" src="dd_RESTService.js" async></script>
+	<script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
+	<script type="text/javascript" src="dd_chartMapConfig.js"></script>
+	<script type="text/javascript">
+		function loadMap() {  // We need to use a global callback because the Bing Map onscriptload parameter doesn't support namespaces... because <i>reasons</i>!
+			chartMap.loadMap();
+		}
+		var chartMap = chartMap || {
+			Settings: JSON.parse(configJSON),
+			allPins: new Array(),
+			init: function () {
+				var bingMapScript = document.createElement('script');
+				bingMapScript.setAttribute("type", "text/javascript");
+				bingMapScript.setAttribute("src", chartMap.Settings.bingMapScriptUrl + "&onscriptload=loadMap");
+				document.body.appendChild(bingMapScript);
+
+				var parameters = chartMap.getParametersFromQuery(window.location.search.substring(1));
+				var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
+				chartMap.entityTypeName = parameters["typename"];
+				chartMap.chartId = dataParam["visid"];
+
+				chartMap.loadChartConfig();
+				chartMap.loadRecords();
+			},
+			loadMap: function () {
+				if (!Microsoft.Maps.Search)
+					Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: chartMap.initBingMap });
+
+				if (!Microsoft.Maps.Themes)
+					Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', { callback: chartMap.initBingMap });
+
+				if (!chartMap.PresentationDescription) {
+					setTimeout(chartMap.loadMap, 10);
+					return;
+				}
+
+				if (chartMap.PresentationDescription.MapType == 1) {
+					Microsoft.Maps.registerModule("PointBasedClusteringModule", "dd_PointBasedClustering.min.js");
+					Microsoft.Maps.loadModule("PointBasedClusteringModule", { callback: chartMap.initPointMap });
+				}
+				else if (chartMap.PresentationDescription.MapType == 2) {
+					Microsoft.Maps.registerModule("HeatMapModule", "dd_HeatMapModule.js");
+					Microsoft.Maps.loadModule("HeatMapModule", { callback: chartMap.initHeatMap });
+				}
+			},
+			initBingMap: function () {
+				if (Microsoft.Maps.Search && Microsoft.Maps.Themes && !chartMap.BingMap) {
+					chartMap.BingMap = new Microsoft.Maps.Map(document.getElementById("mapDiv"), {
+						credentials: chartMap.Settings.BingKey,
+						enableClickableLogo: false,
+						showDashboard: false,
+						enableSearchLogo: false,
+						theme: new Microsoft.Maps.Themes.BingTheme()
+					});
+					chartMap.searchManager = new Microsoft.Maps.Search.SearchManager(chartMap.BingMap);
+					chartMap.BingMap.setView({ zoom: chartMap.Settings.Zoom, center: new Microsoft.Maps.Location(chartMap.Settings.CenterLat, chartMap.Settings.CenterLong) });
+				}
+			},
+			initPointMap: function () {
+				chartMap.clusterLayer = new PointBasedClusteredEntityCollection(
+                    chartMap.BingMap,
                     {
-                        credentials: config.BingKey,
-                        enableClickableLogo: false,
-                        showDashboard: false,
-                        enableSearchLogo: false,
-                        theme: new Microsoft.Maps.Themes.BingTheme()
+                    	singlePinCallback: chartMap.createPin,
+                    	clusteredPinCallback: chartMap.createClusteredPin,
+                    	clusterRadius: chartMap.PresentationDescription.EnableClustering ? chartMap.PresentationDescription.ClusterRadius : -1,
+                    	callback: chartMap.onDrawMapComplete
                     }
-
-                    map = new Microsoft.Maps.Map(document.getElementById("mapDiv"), mapOptions);
-                    map.setView({ zoom: config.Zoom, center: new Microsoft.Maps.Location(config.CenterLat, config.CenterLong) })
-                    Microsoft.Maps.loadModule('Microsoft.Maps.Search', {
-                        callback: function () {
-                            createSearchManager();
-
-                            if (config.MapType == 1) {
-                                Microsoft.Maps.registerModule("PointBasedClusteringModule", "dd_PointBasedClustering.min.js");
-                                Microsoft.Maps.loadModule("PointBasedClusteringModule", {
-                                    callback: function () {
-
-                                        clusterLayer = new PointBasedClusteredEntityCollection(map, {
-                                            singlePinCallback: createPin,
-                                            clusteredPinCallback: createClusteredPin,
-                                            clusterRadius: config.EnableClustering ? config.ClusterRadius : -1,
-                                            callback: onComplete
-                                        });
-
-                                        loadRecords(parameters["typename"]);
-                                    }
-                                });
-                            }
-                            else if (config.MapType == 2) {
-                                Microsoft.Maps.registerModule("HeatMapModule", "dd_HeatMapModule.js");
-                                Microsoft.Maps.loadModule("HeatMapModule", {
-                                    callback: function () {
-                                        heatLayer = new HeatMapLayer(
-                                                                map,
-                                                                [],
-                                                                {
-                                                                    intensity: config.Intensity,
-                                                                    radius: config.Radius,
-                                                                    unit: config.RadiusUnits,
-                                                                    colourgradient: {
-                                                                        "0.00": config.Colour1,
-                                                                        "0.25": config.Colour2,
-                                                                        "0.50": config.Colour3,
-                                                                        "0.75": config.Colour4,
-                                                                        "1.00": config.Colour5
-                                                                    },
-                                                                    callback: onComplete
-                                                                });
-
-                                        loadRecords(parameters["typename"]);
-                                    }
-                                });
-                            }
-                        }
-                    })
-                }
-            });
-        }
-
-        function loadAttributeList(entityType) {
-            var requestQuery = Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/dd_chartmapentitySet?$select=*&$filter=dd_chartid eq '" + chartId + "'&$top=1";
-            var req = new XMLHttpRequest();
-            req.open("GET", requestQuery, false);
-            req.setRequestHeader("Accept", "application/json");
-            req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
-            req.onreadystatechange = function () {
-                if (this.readyState == 4 /* complete */) {
-                    req.onreadystatechange = null;
-                    if (this.status == 200) {
-                        //   debugger;
-                        result = JSON.parse(this.responseText).d.results[0];
-                        attributeList.entitySchemaName = result.dd_EntitySchemaName;
-                        attributeList.LatitudeField = result.dd_LatitudeSchemaName;
-                        attributeList.LongitudeField = result.dd_LongitudeSchemaName;
-
-                        attributeList.name = result.dd_NameField;
-                        attributeList.namelinkentity = result.dd_NameFieldLinkEntity;
-                        attributeList.address = {};
-                        attributeList.address["address"] = result.dd_AddressField;
-                        attributeList.address["city"] = result.dd_CityField;
-                        attributeList.address["state"] = result.dd_StateProvinceField;
-                        attributeList.address["postcode"] = result.dd_PostalCodeField;
-                        attributeList.address["country"] = result.dd_CountryField;
-                        attributeList.address["latitude"] = result.dd_LatitudeField;
-                        attributeList.address["longitude"] = result.dd_LongitudeField;
-                        attributeList.linkentity = {};
-                        attributeList.linkentity["address"] = result.dd_AddressFieldLinkEntity;
-                        attributeList.linkentity["city"] = result.dd_CityFieldLinkEntity;
-                        attributeList.linkentity["state"] = result.dd_StateProvinceFieldLinkEntity;
-                        attributeList.linkentity["postcode"] = result.dd_PostalCodeFieldLinkEntity;
-                        attributeList.linkentity["country"] = result.dd_CountryFieldLinkEntity;
-
-                        config.fetchattributes = result.dd_FetchAttributes;
-                        config.MapType = result.dd_MapType.Value;
-                        config.CacheCoordinates = result.dd_EnableCaching || false;
-
-                        if (config.MapType == 1) {
-                            config.EnableClustering = result.dd_EnableClustering;
-                            config.ClusterRadius = result.dd_ClusterRadius;
-                            config.ClusterTitle = result.dd_ClusterName;
-                            config.PinSize = result.dd_PinSize.Value == 2 ? "micro" : "standard";
-                        }
-
-                        if (config.MapType == 2) {
-                            config.HeatMapType = result.dd_HeatMapBasedOn.Value;
-                            config.Intensity = result.dd_Intensity;
-                            config.IntensityField = result.dd_NumericField;
-                            config.IntensityRange = result.dd_IntensityRange.Value;
-                            config.IntensityCalculation = result.dd_IntensityCalculation.Value;
-                            config.Deviations = result.dd_Deviations;
-                            config.MaxValue = parseFloat(result.dd_MaximumValue);
-                            config.MinValue = parseFloat(result.dd_MinimumValue);
-                            config.Weight = result.dd_Weight;
-                            config.intensityfieldlinkentity = result.dd_NumericFieldLinkEntity;
-                            config.Radius = result.dd_Radius;
-                            config.RadiusUnits = result.dd_RadiusUnits ? "meters" : "pixels";
-                            config.Colour1 = getRGBValue(result.dd_ColourStop1.Value, "20");
-                            config.Colour2 = getRGBValue(result.dd_ColourStop2.Value, "40");
-                            config.Colour3 = getRGBValue(result.dd_ColourStop3.Value, "80");
-                            config.Colour4 = getRGBValue(result.dd_ColourStop4.Value, "120");
-                            config.Colour5 = getRGBValue(result.dd_ColourStop5.Value, "150");
-                        }
+                );
+			},
+			initHeatMap: function () {
+				chartMap.heatLayer = new HeatMapLayer(
+                    chartMap.BingMap,
+                    [],
+                    {
+                    	intensity: chartMap.PresentationDescription.Intensity,
+                    	radius: chartMap.PresentationDescription.Radius,
+                    	unit: chartMap.PresentationDescription.RadiusUnits,
+                    	colourgradient: {
+                    		"0.00": chartMap.PresentationDescription.Colour1,
+                    		"0.25": chartMap.PresentationDescription.Colour2,
+                    		"0.50": chartMap.PresentationDescription.Colour3,
+                    		"0.75": chartMap.PresentationDescription.Colour4,
+                    		"1.00": chartMap.PresentationDescription.Colour5
+                    	},
+                    	callback: chartMap.onDrawMapComplete
                     }
-                    else {
-                        //error
-                    }
-                }
-            };
+                );
+			},
+			onDrawMapComplete: function () {  // Executed every time the map finishes being redrawn, including user scrolling/zooming
+			},
+			loadChartConfig: function () {
+				if (typeof dd_CRMService === "undefined" || typeof XMLParser === "undefined") {
+					setTimeout(chartMap.loadChartConfig, 10, count);
+					return;
+				}
 
-            req.send();
-        }
+				dd_CRMService.Retrieve(
+					chartMap.chartId, "SavedQueryVisualization",
+					null, null,
+					function (result) {
+						chartMap.PresentationDescription = JSON.parse(result.PresentationDescription);
+						chartMap.DataDescription = JSON.parse(result.DataDescription);
 
-        function getRGBValue(colourValue, a) {
-            var value1 = colourValue.toString().substring(1, 4);
-            var value2 = colourValue.toString().substring(4, 7);
-            var value3 = colourValue.toString().substring(7, 10);
+						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";
+						chartMap.DataDescription.Longitude = (typeof chartMap.DataDescription.LongitudeField === 'string') ? chartMap.DataDescription.LongitudeField.toLowerCase() : "";
+					},
+					function (error) { chartMap.ShowErrorOnMap("There was a problem loading the map configuration"); }
+				);
+			},
+			loadRecords: function () {
+				chartMap.getEffectiveFetchXML();
+			},
+			getEffectiveFetchXML: function () {
+				if (parent.effectiveFetchXml && Object.prototype.toString.call(parent.effectiveFetchXml) == "[object HTMLDivElement]") {
+					chartMap.buildFetchXML(parent.effectiveFetchXml.getAttribute("value"));  // Web
+				}
+				else if (parent.$find("crmGrid")) {
+					chartMap.buildFetchXML(parent.$find("crmGrid").GetParameter("effectiveFetchXml"));  // Outlook
+				}
+				else  // Retrieves the FetchXml using the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered view results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards, but it also makes a good fallback if the unsupported methods fail.
+				{
+					var parameters = chartMap.getParametersFromQuery(window.location.search.substring(1));
+					var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
+					var viewId = dataParam["viewid"];
+					chartMap.GetFetchXmlFromViewId(viewId);
+				}
+			},
+			buildFetchXML: function (fetchXMLString) {
+				if (!chartMap.DataDescription) {
+					setTimeout(chartMap.buildFetchXML, 10, fetchXMLString);
+					return;
+				}
 
-            return 'rgba(' + value1 + ',' + value2 + ',' + value3 + ',' + a + ')';
-        }
+				if (!chartMap.PresentationDescription.ShowAllRecords) {  // if showallrecords is true, then it will already be defaulted to "count=5000" and "page=1"
+					chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace('count="250"', fetchXMLString.match(/count=".*?"/));
+					chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace('page="1"', fetchXMLString.match(/page=".*?"/));
+				}
 
-        function init() {
-            config = JSON.parse(configJSON);
+				chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace("<order/>", fetchXMLString.match(/<order.*?\/>/));
+				chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));
 
-            var protocol = config.SSL == "1" ? "https://" : "http://";
+				chartMap.ExecuteFetchXmlRequest();
+			},
+			ExecuteFetchXmlRequest: function() {
+				if (typeof dd_CRMService === "undefined" || typeof XMLParser === "undefined") {
+					setTimeout(chartMap.ExecuteFetchXmlRequest, 10);
+					return;
+				}
 
-            var bingMapScriptUrl = protocol + "ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=7.0&mkt=" + config.Lang + "&s=" + config.SSL + "&onscriptload=loadMap";
+				dd_CRMService.RetrieveFetchXml(chartMap.DataDescription.fetchXML, chartMap.getPinData, function (error) { chartMap.ShowErrorOnMap("There was a problem opening the record list"); });
+			},
+			GetFetchXmlFromViewId: function (viewId) {
+				dd_CRMService.Retrieve(
+					viewId, "SavedQuery", null, null,
+					function (result) { chartMap.buildFetchXML(result.FetchXml); },
+					function (error) { chartMap.ShowErrorOnMap("There was a problem reading the record list"); }
+				);
+			},
+			getPinData: function (entityList) {
+				var pinData = function (crmEntity) {
+					this.Name = crmEntity.attributes[chartMap.DataDescription.NameField];
+					this.Id = crmEntity.id;
+					this.Address = crmEntity.compositeAddress;
+					this.EntityType = chartMap.entityTypeName;
+					this.latitude = crmEntity.attributes[chartMap.DataDescription.Latitude];
+					this.longitude = crmEntity.attributes[chartMap.DataDescription.Longitude];
+					this.weight = crmEntity.attributes[chartMap.DataDescription.NumericField];
+				},
+                entities = entityList.EntityCollection,
+                mapConfig = chartMap.DataDescription;
+				chartMap.geocodeCompleted = 0;
+				chartMap.geocodeTotal = entities.length;
 
-            var bingMapScript = document.createElement('script')
-            bingMapScript.setAttribute("type", "text/javascript")
-            bingMapScript.setAttribute("src", bingMapScriptUrl)
+				for (var e in entities) {
+					var entity = entities[e];
+					entity.compositeAddress = [entity.attributes[mapConfig.AddressField], entity.attributes[mapConfig.CityField], entity.attributes[mapConfig.StateField], entity.attributes[mapConfig.CountryField], entity.attributes[mapConfig.PostCodeField]].filter(function (a) { return a != undefined }).join(", ");
 
-            document.body.appendChild(bingMapScript);
-        }
-    </script>
+					if (entity.attributes[mapConfig.Longitude] && entity.attributes[mapConfig.Latitude]) {  // We already have the coordinates
+						chartMap.allPins.push(new pinData(entity));
+						chartMap.geocodeComplete();
+					}
+					else if (entity.compositeAddress) {  // Must perform geocoding
+						var userData = new pinData(entity);
+						chartMap.sendGeocodeRequest(entity.compositeAddress, userData);
+					}
+					else {  // Skip any records with no address details
+						chartMap.geocodeComplete();
+					}
+				}
+			},
+			sendGeocodeRequest: function (searchString, userData) {
+				if (!chartMap.searchManager) {
+					setTimeout(chartMap.sendGeocodeRequest, 10, searchString, userData);
+					return;
+				}
+
+				chartMap.searchManager.geocode({
+					where: searchString,
+					count: 1,
+					callback: chartMap.onGeocodeSuccess,
+					errorCallback: chartMap.onGeocodeFail,
+					userData: userData
+				});
+			},
+			onGeocodeSuccess: function (result, userData) {
+				if (result) {
+					var topResult = result.results && result.results[0];
+					if (topResult) {
+						userData.latitude = topResult.location.latitude;
+						userData.longitude = topResult.location.longitude;
+
+						chartMap.allPins.push(userData);
+
+						if (chartMap.PresentationDescription.EnableCaching) {
+							chartMap.updateCoordinates(userData.Id, userData.EntityType, userData.longitude, userData.latitude)
+						}
+					}
+				}
+				chartMap.geocodeComplete();
+			},
+			onGeocodeFail: function (result, userData) {
+				// TODO: add a logging or debug feature for admins, that would either store errors in the db, or show them in the UI
+				chartMap.geocodeComplete();
+			},
+			geocodeComplete: function () {
+				if (++chartMap.geocodeCompleted >= chartMap.geocodeTotal) {
+					if (chartMap.PresentationDescription.MapType == 1) {
+						chartMap.addPinsToMap();
+					}
+					else if (chartMap.PresentationDescription.MapType == 2) {
+						chartMap.generateHeat();
+					}
+
+					chartMap.BingMap.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(chartMap.allPins) });
+				}
+			},
+			addPinsToMap: function () {
+				if (!chartMap.clusterLayer) {
+					setTimeout(chartMap.addPinsToMap, 10);
+					return;
+				}
+				chartMap.clusterLayer.SetData(chartMap.allPins);
+			},
+			generateHeat: function () {
+				if (!chartMap.heatLayer) {
+					setTimeout(chartMap.generateHeat, 10);
+					return;
+				}
+
+				if (chartMap.PresentationDescription.HeatMapType && chartMap.PresentationDescription.HeatMapType == 2) {
+					chartMap.allPins.Range = chartMap.PresentationDescription.IntensityRange;
+				}
+				else {
+					chartMap.allPins.Range = 0;
+				}
+
+				chartMap.calculateRange();
+				chartMap.heatLayer.SetPoints(chartMap.allPins);
+			},
+			createPin: function (data, clusterInfo) {
+				var pin = {};
+				pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { typeName: chartMap.PresentationDescription.PinSize });
+				pin.infobox = new Microsoft.Maps.Infobox(
+                    clusterInfo.center,
+                    {
+                    	title: data.Name,
+                    	pushpin: pin.pin,
+                    	description: data.Address,
+                    	titleClickHandler: function () { Xrm.Utility.openEntityForm(data.EntityType, data.Id); }
+                    });
+
+				return pin;
+			},
+			createClusteredPin: function (clusterInfo) {
+				var pin = { Description: "" };
+
+				for (var i in clusterInfo.dataIndices) {
+					pin.Description += '<a href="#" onclick="javascript:Xrm.Utility.openEntityForm(\'' + chartMap.entityTypeName + '\',\'' + chartMap.allPins[clusterInfo.dataIndices[i]].Id + '\');">' + chartMap.allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
+				}
+				pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() });
+				pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center, { title: chartMap.PresentationDescription.ClusterTitle, pushpin: pin.pin, description: pin.Description });
+
+				return pin;
+			},
+			updateCoordinates: function (id, type, longitude, latitude) {
+				var record = {};
+				record[chartMap.DataDescription.LatitudeField] = latitude;
+				record[chartMap.DataDescription.LongitudeField] = longitude;
+
+				dd_CRMService.Update(id, record, chartMap.DataDescription.EntitySchemaName, null, null);
+			},
+			calculateRange: function () {
+				if (chartMap.allPins.Range == 1) {  // Calculated Range
+					var weightArray = chartMap.allPins.map(function (x) { return x.weight; });
+
+					if (chartMap.PresentationDescription.IntensityCalculation == 2) {  // Standard Deviation
+						var STDev = chartMap.stdDev.getStandardDev(weightArray, 2);
+						var Mean = chartMap.stdDev.getAverage(weightArray, 2);
+
+						chartMap.allPins.Max = Mean + (STDev * chartMap.PresentationDescription.Deviations);
+						chartMap.allPins.Min = Mean - (STDev * chartMap.PresentationDescription.Deviations);
+					}
+					else {  // Full Range
+						chartMap.allPins.Max = Math.max.apply(null, weightArray);
+						chartMap.allPins.Min = Math.min.apply(null, weightArray)
+					}
+
+					if (chartMap.allPins.Min < 0) {
+						chartMap.allPins.Min = 0;
+					}
+				}
+				else {  // Fixed range
+					chartMap.allPins.Max = chartMap.PresentationDescription.MaxValue;
+					chartMap.allPins.Min = chartMap.PresentationDescription.MinValue;
+				}
+			},
+			ShowErrorOnMap: function (errorMessage) {
+				errorMessage = errorMessage || "There was a problem loading this map.";
+				if (chartMap.BingMap) {
+					if (chartMap.BingMap.entities)
+						chartMap.BingMap.entities.clear();
+
+					var newElement = document.createElement("div");
+					newElement.style.cssText = "position:absolute; width:100%; top:50%; text-Align:center";
+
+					var innerElement = document.createElement("div");
+					innerElement.innerHTML = "\u003ch2\u003eSorry :(\u003c/h2\u003e" + errorMessage + "\u003cbr/\u003ePlease contact your system administrator";
+
+					innerElement.style.cssText = "background: #f8f7f5; padding:10px; color: #000;";
+					newElement.appendChild(innerElement);
+					chartMap.BingMap.getRootElement().appendChild(newElement);
+				}
+			},
+			getParametersFromQuery: function (query) {
+				var parametersDictionary = new Array();
+				var parameters = query.split('&');
+				for (var i in parameters) {
+					var keyValuePair = parameters[i].split('=');
+					parametersDictionary[unescape(keyValuePair[0])] = unescape(keyValuePair[1]);
+				}
+				return parametersDictionary;
+			},
+			stdDev: new function () {  // Helper for working with standard deviation
+				var getNumWithSetDec = function (num, numOfDec) {
+					var pow10s = Math.pow(10, numOfDec || 0);
+					return (numOfDec) ? Math.round(pow10s * num) / pow10s : num;
+				},
+				getAverage = function (numArr, numOfDec) {
+					var i = numArr.length, sum = 0;
+					while (i--) {
+						sum += numArr[i];
+					}
+					return getNumWithSetDec((sum / numArr.length), numOfDec);
+				},
+				getVariance = function (numArr, numOfDec) {
+					var avg = getAverage(numArr, numOfDec), i = numArr.length, v = 0;
+					while (i--) {
+						v += Math.pow((numArr[i] - avg), 2);
+					}
+					v /= numArr.length;
+					return getNumWithSetDec(v, numOfDec);
+				},
+				getStandardDev = function (numArr, numOfDec) {
+					var stdDev = Math.sqrt(getVariance(numArr, numOfDec));
+					return getNumWithSetDec(stdDev, numOfDec);
+				};
+
+				return {
+					getStandardDev: getStandardDev,
+					getAverage: getAverage
+				}
+			},
+		}
+	</script>
 </head>
-<body onload="init()" style="overflow: hidden;">
-    <div class="MicrosoftMap BingTheme MapTypeId_m medium" id="mapDiv">
-    </div>
+<body onload="chartMap.init()" style="overflow: hidden;">
+	<div class="MicrosoftMap BingTheme MapTypeId_m medium" id="mapDiv"></div>
 </body>
 </html>
