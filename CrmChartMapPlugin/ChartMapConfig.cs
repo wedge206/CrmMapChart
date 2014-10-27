@@ -35,7 +35,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 
 		public string makeContent()
 		{
-			return String.Format("var configJSON = '{0}';", this.ToJSON()).ToBase64String();
+			return String.Format("var configJSON = {0};", this.ToJSON()).ToBase64String();
 		}
 
 		public static ChartMapConfig defaultConfig()
@@ -66,7 +66,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 		{
 			byte[] rawContent = Convert.FromBase64String(configEntity.GetAttributeValue<string>("content"));
 
-			return Encoding.UTF8.GetString(rawContent).Remove(0, 18).TrimEnd('\'', ';').ParseJSON<ChartMapConfig>();
+			return Encoding.UTF8.GetString(rawContent).Remove(0, 17).TrimStart('\'').TrimEnd(';').ParseJSON<ChartMapConfig>();
 		}
 	}
 }

@@ -12,7 +12,7 @@
 			chartMap.loadMap();
 		}
 		var chartMap = chartMap || {
-			Settings: JSON.parse(configJSON),
+			Settings: configJSON,
 			allPins: new Array(),
 			init: function () {
 				var bingMapScript = document.createElement('script');
