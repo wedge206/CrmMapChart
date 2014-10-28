@@ -111,16 +111,6 @@
                 parseInt(dateParts[5], 10),
                 parseInt(dateParts[6], 10)));
         },
-        //GetServiceUrl: function () {
-        //    var context = null;
-        //    if (typeof GetGlobalContext == 'function') {
-        //        context = GetGlobalContext();
-        //    } else if (typeof Xrm != 'undefined') {
-        //        context = Xrm.Page.context;
-        //    }
-
-        //    return context.getClientUrl() + "/XRMServices/2011/Organization.svc/web";
-        //},
         _selectNodes: function (node, xPathExpression) {
             if (typeof (node.selectNodes) != "undefined") {
                 return node.selectNodes(xPathExpression);

@@ -8,7 +8,7 @@
 	<script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
 	<script type="text/javascript" src="dd_chartMapConfig.js"></script>
 	<script type="text/javascript">
-		function loadMap() {  // We need to use a global callback because the Bing Map onscriptload parameter doesn't support namespaces... because <i>reasons</i>!
+		function loadMap() {  // We need to use a global callback because the Bing Map onscriptload parameter doesn't support namespaces... because <i>reasons!</i>
 			chartMap.loadMap();
 		}
 		var chartMap = chartMap || {
@@ -24,16 +24,17 @@
 				var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
 				chartMap.entityTypeName = parameters["typename"];
 				chartMap.chartId = dataParam["visid"];
+				chartMap.viewId = dataParam["viewid"];
 
 				chartMap.loadChartConfig();
 				chartMap.loadRecords();
 			},
 			loadMap: function () {
 				if (!Microsoft.Maps.Search)
-					Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: chartMap.initBingMap });
+					Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: chartMap.initBingMap });  // TODO: It's maybe possible this can still be called twice...
 
 				if (!Microsoft.Maps.Themes)
-					Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', { callback: chartMap.initBingMap });
+					Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', { callback: chartMap.initBingMap });  // TODO: It's maybe possible this can still be called twice...
 
 				if (!chartMap.PresentationDescription) {
 					setTimeout(chartMap.loadMap, 10);
@@ -107,7 +108,7 @@
 						chartMap.PresentationDescription = JSON.parse(result.PresentationDescription);
 						chartMap.DataDescription = JSON.parse(result.DataDescription);
 
-						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";
+						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";  // TODO: Remove the need for these two lines
 						chartMap.DataDescription.Longitude = (typeof chartMap.DataDescription.LongitudeField === 'string') ? chartMap.DataDescription.LongitudeField.toLowerCase() : "";
 					},
 					function (error) { chartMap.ShowErrorOnMap("There was a problem loading the map configuration"); }
@@ -116,19 +117,16 @@
 			loadRecords: function () {
 				chartMap.getEffectiveFetchXML();
 			},
-			getEffectiveFetchXML: function () {
+			getEffectiveFetchXML: function () {  // Web
 				if (parent.effectiveFetchXml && Object.prototype.toString.call(parent.effectiveFetchXml) == "[object HTMLDivElement]") {
-					chartMap.buildFetchXML(parent.effectiveFetchXml.getAttribute("value"));  // Web
+					chartMap.buildFetchXML(parent.effectiveFetchXml.getAttribute("value"));
 				}
-				else if (parent.$find("crmGrid")) {
-					chartMap.buildFetchXML(parent.$find("crmGrid").GetParameter("effectiveFetchXml"));  // Outlook
+				else if (parent.$find("crmGrid")) {  // Outlook
+					chartMap.buildFetchXML(parent.$find("crmGrid").GetParameter("effectiveFetchXml"));
 				}
 				else  // Retrieves the FetchXml using the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered view results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards, but it also makes a good fallback if the unsupported methods fail.
 				{
-					var parameters = chartMap.getParametersFromQuery(window.location.search.substring(1));
-					var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
-					var viewId = dataParam["viewid"];
-					chartMap.GetFetchXmlFromViewId(viewId);
+					chartMap.GetFetchXmlFromViewId(chartMap.viewId);
 				}
 			},
 			buildFetchXML: function (fetchXMLString) {
@@ -143,7 +141,7 @@
 				}
 
 				chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace("<order/>", fetchXMLString.match(/<order.*?\/>/));
-				chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));
+				chartMap.DataDescription.fetchXML = chartMap.DataDescription.fetchXML.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));  // TODO: add support for link-entity filters
 
 				chartMap.ExecuteFetchXmlRequest();
 			},
@@ -170,7 +168,7 @@
 					this.EntityType = chartMap.entityTypeName;
 					this.latitude = crmEntity.attributes[chartMap.DataDescription.Latitude];
 					this.longitude = crmEntity.attributes[chartMap.DataDescription.Longitude];
-					this.weight = crmEntity.attributes[chartMap.DataDescription.NumericField];
+					this.weight = crmEntity.attributes[chartMap.DataDescription.NumericField] || 0;
 				},
                 entities = entityList.EntityCollection,
                 mapConfig = chartMap.DataDescription;
@@ -186,8 +184,7 @@
 						chartMap.geocodeComplete();
 					}
 					else if (entity.compositeAddress) {  // Must perform geocoding
-						var userData = new pinData(entity);
-						chartMap.sendGeocodeRequest(entity.compositeAddress, userData);
+						chartMap.sendGeocodeRequest(entity.compositeAddress, new pinData(entity));
 					}
 					else {  // Skip any records with no address details
 						chartMap.geocodeComplete();
@@ -209,7 +206,7 @@
 				});
 			},
 			onGeocodeSuccess: function (result, userData) {
-				if (result) {
+				if (result) {  // Is this If statement needed?  can result ever be null?
 					var topResult = result.results && result.results[0];
 					if (topResult) {
 						userData.latitude = topResult.location.latitude;
