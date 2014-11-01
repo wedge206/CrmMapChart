@@ -154,6 +154,7 @@
 			else { optionsString = options; }
 		}
 		var results = [];
+		
 		var req = new XMLHttpRequest();
 		req.open("GET", _ODataPath() + type + "Set" + optionsString, async);
 		req.setRequestHeader("Accept", "application/json");
@@ -202,6 +203,8 @@
 							+ "</Execute>"
 						+ "</s:Body>"
 					+ "</s:Envelope>";
+		
+
 		var req = new XMLHttpRequest();
 		req.open("POST", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/Organization.svc/web", async)
 		req.setRequestHeader("Accept", "application/xml, text/xml, */*");
@@ -210,7 +213,13 @@
 		req.onreadystatechange = function () {
 			if (req.readyState == 4) {
 				if (req.status == 200) {
-					return XMLParser.ProcessSoapResponse(req.responseXML, successCallback);
+					if (ActiveXObject) {
+						var xmlDoc = new ActiveXObject('Msxml2.DOMDocument.6.0');
+						xmlDoc.loadXML(req.responseText);
+						return XMLParser.ProcessSoapResponse(xmlDoc, successCallback);
+					}
+					else
+						return XMLParser.ProcessSoapResponse(req.responseXML, successCallback);
 				}
 				else {
 					return XMLParser.ProcessSoapError(req.responseXML, errorCallback);
