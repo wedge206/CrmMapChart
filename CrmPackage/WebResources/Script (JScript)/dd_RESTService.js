@@ -207,19 +207,16 @@
 
 		var req = new XMLHttpRequest();
 		req.open("POST", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/Organization.svc/web", async)
+		try {
+			req.responseType = 'msxml-document';
+		} catch (e) { }
 		req.setRequestHeader("Accept", "application/xml, text/xml, */*");
 		req.setRequestHeader("Content-Type", "text/xml; charset=utf-8");
 		req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute");
 		req.onreadystatechange = function () {
 			if (req.readyState == 4) {
 				if (req.status == 200) {
-					if (ActiveXObject) {
-						var xmlDoc = new ActiveXObject('Msxml2.DOMDocument.6.0');
-						xmlDoc.loadXML(req.responseText);
-						return XMLParser.ProcessSoapResponse(xmlDoc, successCallback);
-					}
-					else
-						return XMLParser.ProcessSoapResponse(req.responseXML, successCallback);
+					return XMLParser.ProcessSoapResponse(req.responseXML, successCallback);
 				}
 				else {
 					return XMLParser.ProcessSoapError(req.responseXML, errorCallback);
