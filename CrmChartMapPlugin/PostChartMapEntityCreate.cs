@@ -24,14 +24,12 @@ namespace CrmChartMap.CrmChartMapPlugin
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PostChartMapEntityCreate"/> class.
 		/// </summary>
-		public PostChartMapEntityCreate()
-			: base(typeof(PostChartMapEntityCreate))
+		public PostChartMapEntityCreate() : base(typeof(PostChartMapEntityCreate))
 		{
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "Create", "dd_chartmapentity", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "Update", "dd_chartmapentity", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "Delete", "dd_chartmapentity", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "PublishAll", "", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
-			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(20, "Delete", "solution", new Action<LocalPluginContext>(ExecuteDeleteSolution)));
 		}
 
 		protected void ExecutePostChartMapEntity(LocalPluginContext localContext)
@@ -63,60 +61,6 @@ namespace CrmChartMap.CrmChartMapPlugin
 					PostPublishAll postPublishAll = new PostPublishAll(localContext);
 					postPublishAll.Run();
 					break;
-			}
-		}
-
-		protected void ExecuteDeleteSolution(LocalPluginContext localContext)
-		{
-			//make sure its our solution
-			if (localContext == null)
-			{
-				throw new ArgumentNullException("localContext");
-			}
-
-			PreDeleteSolution deleteSolution = new PreDeleteSolution(localContext);
-			deleteSolution.Run();
-		}
-
-		protected class PreDeleteSolution
-		{
-			const bool DELETECONFIG = false;
-
-			private IOrganizationService Service;
-			private ITracingService tracingService;
-			private OrganizationServiceContext dataContext;
-
-			private Entity PreImage;
-
-			public PreDeleteSolution(LocalPluginContext localContext)
-			{
-				Service = localContext.OrganizationService;
-				dataContext = new OrganizationServiceContext(Service);
-				tracingService = localContext.TracingService;
-
-				PreImage = localContext.PluginExecutionContext.PostEntityImages["PreImage"] as Entity;
-			}
-
-			public void Run()
-			{
-				if (PreImage.GetAttributeValue<string>("uniquename") == "ChartMaps")
-				{
-					List<Guid> recordList = dataContext.CreateQuery("dd_chartmapentity").Select(c => c.GetAttributeValue<Guid>("dd_chartmapentityid")).ToList();
-
-					foreach (Guid id in recordList)
-					{
-						Service.Delete("dd_chartmapentity", id);
-					}
-
-					if (DELETECONFIG)
-					{
-						Guid chartMapConfigId = dataContext.CreateQuery("webresource").Where(r => (string)r["name"] == "dd_chartmapconfig.js").Select(r => r.GetAttributeValue<Guid>("webresourceid")).SingleOrDefault();
-						if (chartMapConfigId != Guid.Empty)
-						{
-							Service.Delete("webresource", chartMapConfigId);
-						}
-					}
-				}
 			}
 		}
 
@@ -237,94 +181,9 @@ namespace CrmChartMap.CrmChartMapPlugin
 			public void Run()
 			{
 				tracingService.Trace("Beginning PostPublishAll");
-				Entity chartMapConfigRecord = dataContext.CreateQuery("webresource").Where(r => (string)r["name"] == "dd_chartmapconfig.js").SingleOrDefault();
 
-				bool isPublished = false;
-
-				if (chartMapConfigRecord == null)
-				{
-					// Create new webresource
-					tracingService.Trace("Config resource not found.  Generating default config");
-
-					Guid Id = Guid.NewGuid();
-					chartMapConfigRecord = new Entity("webresource")
-					{
-						Id = Id,
-						Attributes = new AttributeCollection()
-						{
-							{ "name", "dd_chartMapConfig.js" },
-							{ "webresourcetype", new OptionSetValue(3) },
-							{ "displayname", "dd_chartMapConfig.js" },
-							{ "content", ChartMapConfig.defaultConfig(Id).makeContent() }
-						}
-					};
-
-					Service.Create(chartMapConfigRecord);
-					tracingService.Trace("New web resource created: " + chartMapConfigRecord.Id.ToString());
-
-					PublishConfig(chartMapConfigRecord.Id);
-					tracingService.Trace("Config resource published");
-				}
-				else
-				{
-					tracingService.Trace("Config file exists");
-					ChartMapConfig chartMapConfig = ChartMapConfig.getConfig(chartMapConfigRecord);
-					tracingService.Trace("Found config with version: " + chartMapConfig.configVersion.ToString());
-
-					if (chartMapConfig.configVersion < 2)  // Upgrading from 2.x
-					{
-						isPublished = chartMapConfig.Published;
-						string SSL = chartMapConfig.SSL ?? "1";
-						string Lang = chartMapConfig.Lang ?? "en-CA";
-						
-						tracingService.Trace("Beginning upgrade procedure");
-						ChartMapConfig upgradedConfig = new ChartMapConfig()
-						{
-							BingKey = chartMapConfig.BingKey,
-							Zoom = chartMapConfig.Zoom,
-							CenterLat = chartMapConfig.CenterLat,
-							CenterLong = chartMapConfig.CenterLong,
-							Lang = Lang,
-							SSL = SSL,
-							ConfigId = chartMapConfig.ConfigId,
-							configVersion = 2,
-							bingMapScriptUrl = String.Format("{2}://ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=7.0&mkt={1}&s={0}", SSL, Lang, SSL == "1" ? "https" : "http"),
-							Published = true
-						};
-						updateConfig(chartMapConfigRecord.Id, upgradedConfig);
-						tracingService.Trace("Completed Configuration file upgrade");
-
-						var entityList = dataContext.CreateQuery("dd_chartmapentity");
-						foreach (var e in entityList)
-						{
-							tracingService.Trace("Upgrading chart: " + e.Id.ToString("B"));
-							Entity upgradedChart = new Entity("savedqueryvisualization")  // fyi: savedqueryvisualization = system chart
-							{
-								Id = Guid.Parse(e.GetAttributeValue<string>("dd_chartid")),
-								Attributes = new AttributeCollection 
-								{ 
-									{ "datadescription", DataDescription.FromEntity(e).ToJSON() },
-									{ "presentationdescription", PresentationDescription.FromEntity(e).ToJSON() },
-								}
-							};
-
-							Service.Update(upgradedChart);
-							tracingService.Trace("Chart upgrade complete.");
-						}
-						tracingService.Trace("Upgrade procedure complete");
-					}
-					else  // upgrading from 3.x
-					{
-						tracingService.Trace("No Upgrade needed");
-						isPublished = chartMapConfig.Published;
-						setConfigIdIfNone(chartMapConfigRecord);
-
-						PublishConfig(chartMapConfigRecord.Id);
-						tracingService.Trace("Config resource published");
-					}
-				}
-
-				if (!isPublished)
+				// Create Defaults
+				if (!dataContext.CreateQuery("dd_chartmapentity").ToList().Any())
 				{
 					tracingService.Trace("Creating predefined maps for Account,Contact,Lead and Opportunity entities");
 					CreateChartConfig("account", "Account Locations", "name", "Displays Account locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Accounts");
@@ -332,69 +191,75 @@ namespace CrmChartMap.CrmChartMapPlugin
 					CreateChartConfig("lead", "Lead Locations", "fullname", "Displays Lead locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Leads");
 					CreateHeatMap("opportunity", "Estimated Value Heat Map", "name", "Displays heat map of Estimated Value by Parent Account address", "parentaccountid.address1_city", "parentaccountid.address1_line1", "parentaccountid.address1_postalcode", "parentaccountid.address1_stateorprovince", "parentaccountid.address1_country", "parentaccountid.address1_latitude", "parentaccountid.address1_longitude", 2, "estimatedvalue", 1000000, 0.5m, 50, false, 1128000128, 1000000255, 1000128000, 1255255000, 1255000000);
 					tracingService.Trace("Predefined maps created sucessfully");
-
-					setPublishedFlag(chartMapConfigRecord.Id, ChartMapConfig.getConfig(chartMapConfigRecord));
 				}
 				else
 				{
-					tracingService.Trace("Solution has already been published.");
+					#region Convert Existing Charts to new format
+					// this bit can be removed in the future, once there are no legacy instances
+					// find all records, and fill in config values if blank
+					tracingService.Trace("Try to find ChartMapConfig.js");
+					ChartMapConfig configSettings = new ChartMapConfig();
+					Entity chartMapConfigRecord = dataContext.CreateQuery("webresource").Where(r => r.GetAttributeValue<string>("name") == "dd_chartmapconfig.js").SingleOrDefault();
+
+					if (chartMapConfigRecord == default(Entity))
+					{
+						tracingService.Trace("Config file not found, using defaults");
+						configSettings = ChartMapConfig.defaultConfig();
+					}
+					else
+					{
+						tracingService.Trace("Config file exists");
+						configSettings = ChartMapConfig.getConfig(chartMapConfigRecord);
+					}
+
+					var allConfigRecords = dataContext.CreateQuery("dd_chartmapentity")
+													  .Select(c => new
+													  {
+														  Id = c.GetAttributeValue<Guid>("dd_chartmapentityid"),
+														  HasZoom = c.Contains("dd_zoom"),
+														  HasLatitude = c.Contains("dd_latitude"),
+														  HasLongitude = c.Contains("dd_longitude"),
+														  HasLanguage = c.Contains("dd_language"),
+														  HasEnableCaching = c.Contains("dd_enablecaching"),
+														  HasShowAllRecords = c.Contains("dd_showallrecords")
+													  });
+
+					foreach (var chartMapConfig in allConfigRecords)
+					{
+						Entity updatedConfig = new Entity("dd_chartmapentity");
+						updatedConfig.Id = chartMapConfig.Id;
+
+						if (!chartMapConfig.HasZoom)
+							updatedConfig["dd_zoom"] = configSettings.Zoom;
+						if (!chartMapConfig.HasLatitude)
+							updatedConfig["dd_latitude"] = configSettings.CenterLat;
+						if (!chartMapConfig.HasLongitude)
+							updatedConfig["dd_longitude"] = configSettings.CenterLong;
+						if (!chartMapConfig.HasLanguage)
+							updatedConfig["dd_language"] = new OptionSetValue(DataDescription.LangCodes.Single(l => l.Value == configSettings.Lang).Key);
+						if (!chartMapConfig.HasEnableCaching)
+							updatedConfig["dd_enablecaching"] = false;
+						if (!chartMapConfig.HasShowAllRecords)
+							updatedConfig["dd_showallrecords"] = false;
+
+						if (!chartMapConfig.HasEnableCaching || !chartMapConfig.HasLanguage || !chartMapConfig.HasLatitude || !chartMapConfig.HasLongitude || !chartMapConfig.HasShowAllRecords || !chartMapConfig.HasZoom)
+							Service.Update(updatedConfig);
+					}
+					#endregion
 				}
 
 				// Remove this plugin step after the first time it runs successfully
-				deletePluginStep();
+				deletePluginStep("CrmChartMap.PostPublishAll");
 			}
 
-			private void PublishConfig(Guid ConfigId)
+			private void deletePluginStep(string name)
 			{
-				OrganizationRequest request = new OrganizationRequest
-				{
-					RequestName = "PublishXml",
-					Parameters = new ParameterCollection() { new KeyValuePair<string, object>("ParameterXml", string.Format("<importexportxml><webresources><webresource>{0}</webresource></webresources></importexportxml>", ConfigId.ToString())) }
-				};
-
-				Service.Execute(request);
-			}
-
-			private void setConfigIdIfNone(Entity configRecord)
-			{
-				ChartMapConfig chartMapConfig = ChartMapConfig.getConfig(configRecord);
-
-				if (chartMapConfig.ConfigId == Guid.Empty)
-				{
-					tracingService.Trace("Setting Config Id");
-					chartMapConfig.ConfigId = configRecord.Id;
-				}
-				else
-				{
-					tracingService.Trace("Config Id already exists");
-				}
-			}
-
-			private void setPublishedFlag(Guid configRecordId, ChartMapConfig config)
-			{
-				tracingService.Trace("Setting published flag = true");
-				config.Published = true;
-				updateConfig(configRecordId, config);
-			}
-
-			private void updateConfig(Guid Id, ChartMapConfig config)
-			{
-				Entity configEntity = new Entity("webresource");
-				configEntity.Id = Id;
-				configEntity["content"] = config.makeContent();
-
-				Service.Update(configEntity);
-				tracingService.Trace("Sucessfully updated conifg");
-			}
-
-			private void deletePluginStep()
-			{
-				tracingService.Trace("Deleting PublishAll plugin step");
-				Guid stepId = dataContext.CreateQuery("sdkmessageprocessingstep").Where(s => s.GetAttributeValue<string>("name") == "CrmChartMap.PostPublishAll").Select(s => s.Id).SingleOrDefault();
+				tracingService.Trace("Deleting " + name + " plugin step");
+				Guid stepId = dataContext.CreateQuery("sdkmessageprocessingstep").Where(s => s.GetAttributeValue<string>("name") == name).Select(s => s.Id).Single();
 				tracingService.Trace("Found step id: " + stepId.ToString("B"));
 
 				Service.Delete("sdkmessageprocessingstep", stepId);
-				tracingService.Trace("PublishAll step sucessfully deleted");
+				tracingService.Trace("Step sucessfully deleted");
 			}
 
 			private void CreateHeatMap(string entityname, string entitydisplayname, string name, string description, string city, string address, string postcode, string province, string country, string latitude, string longitude, int intensityfactor, string numericfield, int weight, decimal intensity, int radius, bool meters, int colourstop1, int colourstop2, int colourstop3, int colourstop4, int colourstop5)
@@ -430,7 +295,11 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "dd_colourstop2", new OptionSetValue(colourstop2) },
                         { "dd_colourstop3", new OptionSetValue(colourstop3) },
                         { "dd_colourstop4", new OptionSetValue(colourstop4) },
-                        { "dd_colourstop5", new OptionSetValue(colourstop5) }
+                        { "dd_colourstop5", new OptionSetValue(colourstop5) },
+						{ "dd_zoom", 3 },
+						{ "dd_language", new OptionSetValue(899300005) },
+						{ "dd_latitude", 56.130366m },
+						{ "dd_longitude", -106.346771m }
                     }
 				};
 
@@ -461,7 +330,11 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "dd_enableclustering", true },
                         { "dd_clusterradius", 30 },
                         { "dd_clustername", clustertitle },
-                        { "dd_pinsize", new OptionSetValue(1) }
+                        { "dd_pinsize", new OptionSetValue(1) },
+						{ "dd_zoom", 3 },
+						{ "dd_language", new OptionSetValue(899300005) },
+						{ "dd_latitude", 56.130366m },
+						{ "dd_longitude", -106.346771m }
                     }
 				};
 
