@@ -1,4 +1,5 @@
-﻿function onLoad() {
+﻿// TODO: replace almost all of this with business rules
+function onLoad() {
 
     if (Xrm.Page.getAttribute("dd_chartname").getValue()) {
         Xrm.Page.getControl("dd_chartname").setDisabled(true);
@@ -15,6 +16,34 @@
 
 function onSave() {
 
+}
+
+function setBingMapsKey() {  // Called from the ribbon button
+	dd_CRMService.RetrieveMultiple(
+					"organization",
+					"$select=organizationid,bingmapsapikey&$top=1",  // TODO: Check casing
+					function (results) {  //successCallback
+						var oldKey = results[0].bingmapsapikey || "";
+						var newKey = prompt("Enter your Bing Maps API Key:\nThis can also be set in the System Settings", oldKey);
+						if (newKey != oldKey) {
+							Xrm.Utility.confirmDialog(
+								"This will update the saved key to: " + newKey + "\nAre you Sure?",
+								function () {
+									dd_CRMService.Update(
+										results[0].organizationid,
+										{ "bingmapsapikey": newKey },
+										"organization",
+										function () { Xrm.Utility.Alert("Key Saved Successfully") },
+										function (error) { Xrm.Utility.Alert(error); }
+									);
+								}
+							);
+						}
+					},
+					function (error) { //errorCallback
+						Xrm.Utility.Alert(error);
+					}
+				);
 }
 
 function enableCaching_onChange() {

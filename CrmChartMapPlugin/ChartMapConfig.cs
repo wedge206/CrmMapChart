@@ -3,35 +3,36 @@ using System.Runtime.Serialization;
 using System.Text;
 using Microsoft.Xrm.Sdk;
 
+// NOTE: This class is legacy - only used for upgrading from pre-3.0
 namespace CrmChartMap.CrmChartMapPlugin
 {
 	[DataContract]
 	public class ChartMapConfig
 	{
 		[DataMember]
-		public string BingKey;
+		public string BingKey;   // This can be stored in CRM Organization table
 		[DataMember]
-		public bool Published;
+		public bool Published;  // we can detect if defaults are created without using this flag
 		[DataMember]
-		public int Zoom;
+		public int Zoom;  // This can be map specifc
 		[DataMember]
-		public decimal CenterLat;
+		public decimal CenterLat;  // map specific
 		[DataMember]
-		public decimal CenterLong;
+		public decimal CenterLong;  // map specific
 		[DataMember]
-		public string Lang;
+		public string Lang;  // should be org wide setting
 		[DataMember]
-		public string SSL;
+		public string SSL;  // can be detected onload
 		[DataMember]
 		public bool EnableClustering;  // No longer used
 		[DataMember]
 		public int ClusterRadius;  // No longer used
 		[DataMember]
-		public Guid ConfigId;
+		public Guid ConfigId;  // this is its own webresourceid in crm - not needed if we eliminate the rest of this
 		[DataMember]
-		public string bingMapScriptUrl;
+		public string bingMapScriptUrl;  // can be built on load
 		[DataMember]
-		public int configVersion;
+		public int configVersion;  // if we eliminate config then this not needed
 
 		public string makeContent()
 		{

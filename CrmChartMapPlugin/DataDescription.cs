@@ -33,6 +33,14 @@ namespace CrmChartMap.CrmChartMapPlugin
         public string NumericField;
         [DataMember]
         public string fetchXML;
+		[DataMember]
+		public string BingMapScriptUrl;
+		[DataMember]
+		public decimal CenterLat;
+		[DataMember]
+		public decimal CenterLong;
+		[DataMember]
+		public int CenterZoom;
 
         public static DataDescription FromEntity(Entity entity)
         {
@@ -47,6 +55,10 @@ namespace CrmChartMap.CrmChartMapPlugin
                 CountryField = entity.GetAttributeValue<string>("dd_countryfield"),
                 PostCodeField = entity.GetAttributeValue<string>("dd_postalcodefield"),
                 NumericField = entity.GetAttributeValue<string>("dd_numericfield"),
+				BingMapScriptUrl = String.Format("ecn.dev.virtualearth.net/mapcontrol/mapcontrol.ashx?v=7.0&mkt={0}", LangCodes[entity.GetAttributeValue<OptionSetValue>("dd_language").Value]),
+				CenterLat = entity.GetAttributeValue<decimal>("dd_latitude"),
+				CenterLong = entity.GetAttributeValue<decimal>("dd_longitude"),
+				CenterZoom = entity.GetAttributeValue<int>("dd_zoom"),
                 fetchXML = BuildFetchXML(entity) 
             };
         }
@@ -107,5 +119,37 @@ namespace CrmChartMap.CrmChartMapPlugin
                 linkentity = link;
             }
         }
+
+		internal static Dictionary<int, string> LangCodes = new Dictionary<int, string>()		
+		{
+			{ 899300000, "cs-CZ" },
+			{ 899300001, "da-DK" },
+			{ 899300002, "nl-BE"},
+			{ 899300003, "nl-NL"},
+			{ 899300004, "en-AU"},
+			{ 899300005, "en-CA"},
+			{ 899300006, "en-IN"},
+			{ 899300007, "en-GB"},
+			{ 899300008, "en-US"},
+			{ 899300009, "fi-FI"},
+			{ 899300010, "fr-BE"},
+			{ 899300011, "fr-CA"},
+			{ 899300012, "fr-CH" },
+			{ 899300013, "fr-FR" },
+			{ 899300014, "de-DE" },
+			{ 899300015, "ja-JP" },
+			{ 899300016, "Ko-KR" },
+			{ 899300017, "nb-NO" },
+			{ 899300018, "pl-PL" },
+			{ 899300019, "pt-BR" },
+			{ 899300020, "pt-PT" },
+			{ 899300021, "ru-RU" },
+			{ 899300022, "es-MX" },
+			{ 899300023, "es-ES" },
+			{ 899300024, "es-US" },
+			{ 899300025, "sv-SE" },
+			{ 899300026, "zh-HK" },
+			{ 899300027, "zh-TW" }
+		};
     }
 }
