@@ -64,16 +64,16 @@
 
 		var systemQueryOptions = "";
 
-		if (select !== null || expand !== null) {
+		if (select != null || expand != null) {
 			systemQueryOptions = "?";
-			if (select !== null) {
+			if (select != null) {
 				var selectString = "$select=" + select;
-				if (expand !== null) {
+				if (expand != null) {
 					selectString = selectString + "," + expand;
 				}
 				systemQueryOptions = systemQueryOptions + selectString;
 			}
-			if (expand !== null) {
+			if (expand != null) {
 				systemQueryOptions = systemQueryOptions + "&$expand=" + expand;
 			}
 		}
@@ -147,7 +147,7 @@
 		errorCallback = errorCallback || function (result) { return result; };
 
 		var optionsString;
-		if (options !== null) {
+		if (options != null) {
 			if (options.charAt(0) != "?") {
 				optionsString = "?" + options;
 			}
@@ -165,7 +165,7 @@
 				if (this.status == 200) {
 					var returned = JSON.parse(this.responseText, _dateReviver).d;
 					results = results.concat(returned.results);
-					if (returned.__next !== null) {
+					if (returned.__next != null) {
 						var queryOptions = returned.__next.substring((_ODataPath() + type + "Set").length);
 						return RetrieveMultiple(type, queryOptions, function (result) { return result; });
 					}
@@ -185,17 +185,6 @@
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
 
-		var request = "<s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'> \
-						  <s:Body> \
-							<RetrieveMultiple xmlns='http://schemas.microsoft.com/xrm/2011/Contracts/Services' xmlns:i='http://www.w3.org/2001/XMLSchema-instance'> \
-							  <query i:type='a:FetchExpression' xmlns:a='http://schemas.microsoft.com/xrm/2011/Contracts'> \
-								<a:Query>" + _encodeXml(requestXml) + "</a:Query> \
-							  </query> \
-							</RetrieveMultiple> \
-						  </s:Body> \
-						</s:Envelope>";
-
-
 		var req = new XMLHttpRequest();
 		req.open("POST", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/Organization.svc/web", async);
 		try {
@@ -203,6 +192,7 @@
 		} catch (e) { }
 		req.setRequestHeader("Accept", "application/xml, text/xml, */*");
 		req.setRequestHeader("Content-Type", "text/xml; charset=utf-8");
+		//req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute");
 		req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/RetrieveMultiple");
 		req.onreadystatechange = function () {
 			if (req.readyState == 4) {
@@ -214,15 +204,24 @@
 				}
 			}
 		};
-		req.send(request);
+
+		req.send("<s:Envelope xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'> \
+					<s:Body> \
+					<RetrieveMultiple xmlns='http://schemas.microsoft.com/xrm/2011/Contracts/Services' xmlns:i='http://www.w3.org/2001/XMLSchema-instance'> \
+						<query i:type='a:FetchExpression' xmlns:a='http://schemas.microsoft.com/xrm/2011/Contracts'> \
+						<a:Query>" + _encodeXml(requestXml) + "</a:Query> \
+						</query> \
+					</RetrieveMultiple> \
+					</s:Body> \
+			 	  </s:Envelope>");
 	}
 
 	return {
 		Create: Create,
 		Retrieve: Retrieve,
 		RetrieveMultiple: RetrieveMultiple,
+		RetrieveFetchXml: RetrieveFetchXml,
 		Update: Update,
-		Delete: Delete,
-		RetrieveFetchXml: RetrieveFetchXml
+		Delete: Delete
 	};
 };

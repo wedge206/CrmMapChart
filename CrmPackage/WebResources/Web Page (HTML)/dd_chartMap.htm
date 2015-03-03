@@ -17,7 +17,7 @@
 				chartMap.retrieveBingMapAPIKey();  // Async
 				chartMap.loadRecords();  // Async
 			},
-			getWindowParameters: function() {
+			getWindowParameters: function () {
 				var parameters = chartMap.getParametersFromQuery(window.location.search.substring(1));
 				var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
 
@@ -25,15 +25,16 @@
 				chartMap.chartId = dataParam["visid"];
 				chartMap.viewId = dataParam["viewid"];
 			},
-			retrieveBingMapAPIKey: function() {
+			retrieveBingMapAPIKey: function () {
 				dd_CRMService.RetrieveMultiple(
 					"Organization",
-					"$select=BingMapsApiKey&$top=1",
+					"$select=BingMapsApiKey&$filter=Name eq '" + Xrm.Page.context.getOrgUniqueName() + "'&$top=1",
 					function (results) {  //successCallback
 						chartMap.Settings.BingKey = results[0].BingMapsApiKey;
 					},
 					function (error) { //errorCallback
-						chartMap.ShowErrorOnMap("Failed to Retrieve API Key");  
+						chartMap.Settings.BingKey = "";
+						chartMap.ShowErrorOnMap("Failed to Retrieve API Key");
 					}
 				);
 			},
@@ -68,7 +69,7 @@
 					setTimeout(chartMap.initBingMap, 10);
 					return;
 				}
-				
+
 				if (Microsoft.Maps.Search && Microsoft.Maps.Themes && !chartMap.BingMap) {
 					chartMap.BingMap = new Microsoft.Maps.Map(document.getElementById("mapDiv"), {
 						credentials: chartMap.Settings.BingKey,
@@ -82,6 +83,11 @@
 				}
 			},
 			initPointMap: function () {
+				if (!chartMap.BingMap) {
+					setTimeout(chartMap.initPointMap, 10);
+					return;
+				}
+
 				chartMap.clusterLayer = new PointBasedClusteredEntityCollection(
 					chartMap.BingMap,
 					{
@@ -93,6 +99,11 @@
 				);
 			},
 			initHeatMap: function () {
+				if (!chartMap.BingMap) {
+					setTimeout(chartMap.initPointMap, 10);
+					return;
+				}
+
 				chartMap.heatLayer = new HeatMapLayer(
 					chartMap.BingMap,
 					[],
@@ -100,7 +111,7 @@
 						intensity: chartMap.PresentationDescription.Intensity,
 						radius: chartMap.PresentationDescription.Radius,
 						unit: chartMap.PresentationDescription.RadiusUnits,
-						colourgradient: { 
+						colourgradient: {
 							"0.00": chartMap.PresentationDescription.Colour1,
 							"0.25": chartMap.PresentationDescription.Colour2,
 							"0.50": chartMap.PresentationDescription.Colour3,
@@ -136,13 +147,9 @@
 				);
 			},
 			loadBingMapScript: function () {
-				debugger;
-				//var bingMapScript = document.createElement('script');
-				//bingMapScript.type = "text/javascript";
-				var bingMapScript = document.getElementById("BingMapScript");  // TODO:  Want to try this. Need to test this alot
+				var bingMapScript = document.getElementById("BingMapScript");
 				bingMapScript.onload = function () { chartMap.loadMap(); };
 				bingMapScript.src = location.protocol + "//" + chartMap.DataDescription.BingMapScriptUrl + ((location.protocol === "https:") ? "&s=1" : "");
-				//document.body.appendChild(bingMapScript);
 			},
 			loadRecords: function () {
 				if (!chartMap.DataDescription) {
@@ -182,7 +189,6 @@
 					setTimeout(chartMap.ExecuteFetchXmlRequest, 10, fetchXMLString);
 					return;
 				}
-
 				dd_CRMService.RetrieveFetchXml(fetchXMLString, chartMap.getPinData, function (error) { chartMap.ShowErrorOnMap("There was a problem opening the record list"); });
 			},
 			GetFetchXmlFromViewId: function (viewId) {
@@ -198,43 +204,47 @@
 				//);
 			},
 			getPinData: function (entityList) {
-				var pinData = function (crmEntity) {
-					this.Name = crmEntity.attributes[chartMap.DataDescription.NameField];
+				var pinData = function (crmEntity) {  // Class to store pinData as gets passed around
+					this.Name = crmEntity[chartMap.DataDescription.NameField];
 					this.Id = crmEntity.id;
 					this.Address = crmEntity.compositeAddress;
 					this.EntityType = chartMap.entityTypeName;
-					this.latitude = crmEntity.attributes[chartMap.DataDescription.Latitude];
-					this.longitude = crmEntity.attributes[chartMap.DataDescription.Longitude];
-					this.weight = crmEntity.attributes[chartMap.DataDescription.NumericField] || 0;
-				},
-				mapConfig = chartMap.DataDescription;
+					this.latitude = crmEntity[chartMap.DataDescription.Latitude];
+					this.longitude = crmEntity[chartMap.DataDescription.Longitude];
+					this.weight = crmEntity[chartMap.DataDescription.NumericField] || 0;
+				};
+				var mapConfig = chartMap.DataDescription;
 				chartMap.geocodeCompleted = 0;
-				chartMap.geocodeTotal = entityList.EntityCollection.length;
+				chartMap.geocodeTotal = entityList.length;
 
-				for (var e in entityList.EntityCollection) {
-					var entity = entityList.EntityCollection[e];
-					entity.compositeAddress = [ entity.attributes[mapConfig.AddressField],
-												entity.attributes[mapConfig.CityField],
-												entity.attributes[mapConfig.StateField],
-												entity.attributes[mapConfig.CountryField],
-												entity.attributes[mapConfig.PostCodeField]
-											  ].filter(function (a) { return a != undefined; }).join(", ");
+				for (var e in entityList) {
+					var entity = entityList[e];
 
-					if (entity.attributes[mapConfig.Longitude] && entity.attributes[mapConfig.Latitude]) {  // We already have the coordinates
+					if (entity[mapConfig.Longitude] && entity[mapConfig.Latitude]) {  // We already have the coordinates
 						chartMap.allPins.push(new pinData(entity));
 						chartMap.geocodeComplete();
 					}
-					else if (entity.compositeAddress) {  // Must perform geocoding
-						chartMap.sendGeocodeRequest(entity.compositeAddress, new pinData(entity));
-					}
-					else {  // Skip records with no address details
-						chartMap.geocodeComplete();
+					else {   // Must perform geocoding
+						// TODO: composite address is included in results - we must harness its power
+						entity.compositeAddress = [entity[mapConfig.AddressField],
+							entity[mapConfig.CityField],
+							entity[mapConfig.StateField],
+							entity[mapConfig.CountryField],
+							entity[mapConfig.PostCodeField]
+						].filter(function (a) { return a != undefined; }).join(", ");
+
+						if (entity.compositeAddress) {  // Perform Geocoding
+							chartMap.sendGeocodeRequest(entity.compositeAddress, new pinData(entity));
+						}
+						else {  // Skip records with no address details
+							chartMap.geocodeComplete();
+						}
 					}
 				}
 			},
 			sendGeocodeRequest: function (searchString, pinData) {
 				if (!chartMap.searchManager) {
-					setTimeout(chartMap.sendGeocodeRequest, 10, searchString, userData);
+					setTimeout(chartMap.sendGeocodeRequest, 10, searchString, pinData);
 					return;
 				}
 
