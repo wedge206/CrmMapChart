@@ -148,9 +148,9 @@ function RetrieveApiKey(callback) {
 			if (this.status == 200) {
 				callback(JSON.parse(this.responseText).d.results[0]);
 			}
-		}
-		else {
-			throw "Failed to retrieve existing Api Key";
+			else {
+				throw "Failed to retrieve existing Api Key";
+			}
 		}
 	};
 	req.send();
