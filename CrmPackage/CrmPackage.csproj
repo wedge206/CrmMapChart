@@ -69,9 +69,9 @@
       <UniqueName>dd_chartMapEntityScript.js</UniqueName>
       <WebResourceType>Script</WebResourceType>
     </CRMWebResource>
-    <CRMWebResource Include="WebResources\Script (JScript)\dd_PointBasedClustering.min.js">
-      <DisplayName>dd_PointBasedClustering.min.js</DisplayName>
-      <UniqueName>dd_PointBasedClustering.min.js</UniqueName>
+    <CRMWebResource Include="WebResources\Script (JScript)\dd_PointBasedClustering.js">
+      <DisplayName>dd_PointBasedClustering.js</DisplayName>
+      <UniqueName>dd_PointBasedClustering.js</UniqueName>
       <WebResourceType>Script</WebResourceType>
     </CRMWebResource>
     <CRMWebResource Include="WebResources\Web Page (HTML)\dd_chartMap.htm">
