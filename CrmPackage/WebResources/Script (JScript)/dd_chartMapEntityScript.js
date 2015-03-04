@@ -139,7 +139,7 @@ function maptype_onChange() {
 
 function RetrieveApiKey(callback) {
 	var req = new XMLHttpRequest();
-	req.open("GET", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/OrganizationSet?$select=OrganizationId,BingMapsApiKey&$filter=Name eq '" + Xrm.Page.context.getOrgUniqueName() + "'&$top=1", true);
+	req.open("GET", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/OrganizationSet?$select=OrganizationId,BingMapsApiKey&$top=1", true);
 	req.setRequestHeader("Accept", "application/json");
 	req.setRequestHeader("Content-Type", "application/json; charset=utf-8");
 	req.onreadystatechange = function () {
