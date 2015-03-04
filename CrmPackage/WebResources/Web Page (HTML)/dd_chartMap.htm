@@ -3,8 +3,8 @@
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<title>Locations on Bing Maps</title>
-	<script type="text/javascript" src="dd_XMLParser.js" async></script>
-	<script type="text/javascript" src="dd_RESTService.js" async></script>
+	<script type="text/javascript" src="dd_XMLParser.js"></script>
+	<script type="text/javascript" src="dd_RESTService.js"></script>
 	<script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
 	<script type="text/javascript" id="BingMapScript"></script>
 	<script type="text/javascript">
@@ -12,25 +12,40 @@
 			Settings: new Object(),
 			allPins: new Array(),
 			init: function () {
-				chartMap.getWindowParameters();  // Sync
-				chartMap.loadChartConfig();  // Async
+				chartMap.getWindowParameters();    // Sync
+				chartMap.loadChartConfig();        // Async
 				chartMap.retrieveBingMapAPIKey();  // Async
-				chartMap.loadRecords();  // Async
+				chartMap.loadRecords();            // Async
 			},
 			getWindowParameters: function () {
-				var parameters = chartMap.getParametersFromQuery(window.location.search.substring(1));
-				var dataParam = chartMap.getParametersFromQuery(parameters["data"]);
+				var parameters = Xrm.Page.context.getQueryStringParameters();
+				var dataParam = chartMap.parseQueryParameters(parameters.data);
 
-				chartMap.entityTypeName = parameters["typename"];
+				chartMap.entityTypeName = parameters.typename;
 				chartMap.chartId = dataParam["visid"];
 				chartMap.viewId = dataParam["viewid"];
+			},
+			loadChartConfig: function () {
+				dd_CRMService.Retrieve(
+					chartMap.chartId, "SavedQueryVisualization",
+					null, null,
+					function (result) {
+						chartMap.PresentationDescription = JSON.parse(result.PresentationDescription);
+						chartMap.DataDescription = JSON.parse(result.DataDescription);
+
+						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";
+						chartMap.DataDescription.Longitude = (typeof chartMap.DataDescription.LongitudeField === 'string') ? chartMap.DataDescription.LongitudeField.toLowerCase() : "";
+					},
+					function (error) { chartMap.ShowErrorOnMap("There was a problem loading the map configuration"); }
+				);
 			},
 			retrieveBingMapAPIKey: function () {
 				dd_CRMService.RetrieveMultiple(
 					"Organization",
-					"$select=BingMapsApiKey&$filter=Name eq '" + Xrm.Page.context.getOrgUniqueName() + "'&$top=1",
+					"$select=BingMapsApiKey&$top=1",
 					function (results) {  //successCallback
 						chartMap.Settings.BingKey = results[0].BingMapsApiKey;
+						chartMap.loadBingMapScript();
 					},
 					function (error) { //errorCallback
 						chartMap.Settings.BingKey = "";
@@ -38,20 +53,25 @@
 					}
 				);
 			},
+			loadBingMapScript: function () {
+				var bingMapScript = document.getElementById("BingMapScript");
+				bingMapScript.onload = function () { chartMap.loadMap(); };
+				bingMapScript.src = location.protocol + "//" + chartMap.DataDescription.BingMapScriptUrl + ((location.protocol === "https:") ? "&s=1" : "");
+			},
 			loadMap: function () {
 				if (typeof Microsoft === "undefined" || !Microsoft.Maps || !Microsoft.Maps.loadModule) {
 					setTimeout(chartMap.loadMap, 10);
 					return;
 				}
 
-				if (!Microsoft.Maps.Search) {
-					Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: chartMap.initBingMap });
-				}
-				if (!Microsoft.Maps.Themes) {
-					Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', { callback: chartMap.initBingMap });
-				}
+				Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: chartMap.initBingMap });
+				Microsoft.Maps.loadModule('Microsoft.Maps.Themes.BingTheme', { callback: chartMap.initBingMap });
+
+				chartMap.registerModule();
+			},
+			registerModule: function() {
 				if (!chartMap.PresentationDescription) {
-					setTimeout(chartMap.loadMap, 10);
+					setTimeout(chartMap.registerModule, 10);
 					return;
 				}
 
@@ -70,8 +90,8 @@
 					return;
 				}
 
-				if (Microsoft.Maps.Search && Microsoft.Maps.Themes && !chartMap.BingMap) {
-					chartMap.BingMap = new Microsoft.Maps.Map(document.getElementById("mapDiv"), {
+				if (Microsoft.Maps.Search && Microsoft.Maps.Themes) {
+					chartMap.BingMap = chartMap.BingMap || new Microsoft.Maps.Map(document.getElementById("mapDiv"), {
 						credentials: chartMap.Settings.BingKey,
 						enableClickableLogo: false,
 						showDashboard: false,
@@ -122,35 +142,6 @@
 					}
 				);
 			},
-			onDrawMapComplete: function () {  // Executed every time the map finishes being redrawn, including user scrolling/zooming
-				// This is left here as a reminder that this feature exists, in case it's needed in the future.
-			},
-			loadChartConfig: function () {
-				if (typeof dd_CRMService === "undefined" || typeof XMLParser === "undefined") {
-					setTimeout(chartMap.loadChartConfig, 10);
-					return;
-				}
-
-				dd_CRMService.Retrieve(
-					chartMap.chartId, "SavedQueryVisualization",
-					null, null,
-					function (result) {
-						chartMap.PresentationDescription = JSON.parse(result.PresentationDescription);
-						chartMap.DataDescription = JSON.parse(result.DataDescription);
-
-						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";
-						chartMap.DataDescription.Longitude = (typeof chartMap.DataDescription.LongitudeField === 'string') ? chartMap.DataDescription.LongitudeField.toLowerCase() : "";
-
-						chartMap.loadBingMapScript();
-					},
-					function (error) { chartMap.ShowErrorOnMap("There was a problem loading the map configuration"); }
-				);
-			},
-			loadBingMapScript: function () {
-				var bingMapScript = document.getElementById("BingMapScript");
-				bingMapScript.onload = function () { chartMap.loadMap(); };
-				bingMapScript.src = location.protocol + "//" + chartMap.DataDescription.BingMapScriptUrl + ((location.protocol === "https:") ? "&s=1" : "");
-			},
 			loadRecords: function () {
 				if (!chartMap.DataDescription) {
 					setTimeout(chartMap.loadRecords, 10);
@@ -169,7 +160,7 @@
 					FetchXml = chartMap.GetFetchXmlFromViewId(chartMap.viewId);
 				}
 
-				chartMap.ExecuteFetchXmlRequest(FetchXml);
+				dd_CRMService.RetrieveFetchXml(FetchXml, chartMap.getPinData, function (error) { chartMap.ShowErrorOnMap("There was a problem opening the record list"); });
 			},
 			buildFetchXML: function (fetchXMLString) {
 				var result = chartMap.DataDescription.fetchXML;
@@ -181,15 +172,7 @@
 				result = result.replace("<order/>", fetchXMLString.match(/<order.*?\/>/));
 				result = result.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));  // TODO: add support for link-entity filters
 
-				//chartMap.ExecuteFetchXmlRequest();
 				return result;
-			},
-			ExecuteFetchXmlRequest: function (fetchXMLString) {
-				if (typeof dd_CRMService === "undefined" || typeof XMLParser === "undefined") {
-					setTimeout(chartMap.ExecuteFetchXmlRequest, 10, fetchXMLString);
-					return;
-				}
-				dd_CRMService.RetrieveFetchXml(fetchXMLString, chartMap.getPinData, function (error) { chartMap.ShowErrorOnMap("There was a problem opening the record list"); });
 			},
 			GetFetchXmlFromViewId: function (viewId) {
 				var result = dd_CRMService.Retrieve(viewId, "SavedQuery", null, null);
@@ -197,14 +180,9 @@
 					return result.FetchXml;
 				else
 					chartMap.ShowErrorOnMap("There was a problem reading the record list");
-				//dd_CRMService.Retrieve(
-				//	viewId, "SavedQuery", null, null,
-				//	function (result) { chartMap.buildFetchXML(result.FetchXml); },
-				//	function (error) { chartMap.ShowErrorOnMap("There was a problem reading the record list"); }
-				//);
 			},
 			getPinData: function (entityList) {
-				var pinData = function (crmEntity) {  // Class to store pinData as gets passed around
+				var pinData = function (crmEntity) {  // Class to store pinData as it gets passed around
 					this.Name = crmEntity[chartMap.DataDescription.NameField];
 					this.Id = crmEntity.id;
 					this.Address = crmEntity.compositeAddress;
@@ -220,19 +198,13 @@
 				for (var e in entityList) {
 					var entity = entityList[e];
 
+					entity.compositeAddress = [ entity[mapConfig.AddressField], entity[mapConfig.CityField], entity[mapConfig.StateField], entity[mapConfig.CountryField], entity[mapConfig.PostCodeField] ].filter(function (a) { return a != undefined; }).join(", ");
+
 					if (entity[mapConfig.Longitude] && entity[mapConfig.Latitude]) {  // We already have the coordinates
 						chartMap.allPins.push(new pinData(entity));
 						chartMap.geocodeComplete();
 					}
 					else {   // Must perform geocoding
-						// TODO: composite address is included in results - we must harness its power
-						entity.compositeAddress = [entity[mapConfig.AddressField],
-							entity[mapConfig.CityField],
-							entity[mapConfig.StateField],
-							entity[mapConfig.CountryField],
-							entity[mapConfig.PostCodeField]
-						].filter(function (a) { return a != undefined; }).join(", ");
-
 						if (entity.compositeAddress) {  // Perform Geocoding
 							chartMap.sendGeocodeRequest(entity.compositeAddress, new pinData(entity));
 						}
@@ -377,13 +349,12 @@
 
 					var innerElement = document.createElement("div");
 					innerElement.innerHTML = "\u003ch2\u003eSorry :(\u003c/h2\u003e" + errorMessage + "\u003cbr/\u003ePlease contact your system administrator";
-
 					innerElement.style.cssText = "background: #f8f7f5; padding:10px; color: #000;";
 					newElement.appendChild(innerElement);
 					chartMap.BingMap.getRootElement().appendChild(newElement);
 				}
 			},
-			getParametersFromQuery: function (query) {
+			parseQueryParameters: function (query) {
 				var parametersDictionary = new Array();
 				var parameters = query.split('&');
 				for (var i in parameters) {
