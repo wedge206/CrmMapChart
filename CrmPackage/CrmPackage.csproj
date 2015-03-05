@@ -80,12 +80,6 @@
       <WebResourceType>WebPage</WebResourceType>
       <WebResourceLanguage>English (United States)</WebResourceLanguage>
     </CRMWebResource>
-    <CRMWebResource Include="WebResources\Web Page (HTML)\dd_chartMapConfig.htm">
-      <DisplayName>dd_chartMapConfig.htm</DisplayName>
-      <UniqueName>dd_chartMapConfig.htm</UniqueName>
-      <WebResourceType>WebPage</WebResourceType>
-      <WebResourceLanguage>English (United States)</WebResourceLanguage>
-    </CRMWebResource>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\CrmChartMapPlugin\CrmChartMapPlugin.csproj">
