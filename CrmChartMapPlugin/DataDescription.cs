@@ -15,10 +15,15 @@ namespace CrmChartMap.CrmChartMapPlugin
         public string NameField;
         [DataMember]
         public string EntitySchemaName;
+		[DataMember]
+		public string LatitudeField;
+		[DataMember]
+		public string LongitudeField;
+		[DataMember]
+        public string LatitudeSchemaName;
         [DataMember]
-        public string LatitudeField;
-        [DataMember]
-        public string LongitudeField;
+        public string LongitudeSchemaName;
+		
         [DataMember]
         public string AddressField;
         [DataMember]
@@ -46,8 +51,10 @@ namespace CrmChartMap.CrmChartMapPlugin
         {
             return new DataDescription() {
 				EntitySchemaName = entity.GetAttributeValue<string>("dd_entityschemaname"),
-				LatitudeField = entity.GetAttributeValue<string>("dd_latitudeschemaname"),
-                LongitudeField = entity.GetAttributeValue<string>("dd_longitudeschemaname"),
+				LatitudeField = entity.GetAttributeValue<string>("dd_latitudefield"),
+				LongitudeField = entity.GetAttributeValue<string>("dd_longitudefield"),
+				LatitudeSchemaName = entity.GetAttributeValue<string>("dd_latitudeschemaname"),
+                LongitudeSchemaName = entity.GetAttributeValue<string>("dd_longitudeschemaname"),
                 NameField = entity.GetAttributeValue<string>("dd_namefield"),
                 AddressField = entity.GetAttributeValue<string>("dd_addressfield"),
                 CityField = entity.GetAttributeValue<string>("dd_cityfield"),
@@ -93,7 +100,6 @@ namespace CrmChartMap.CrmChartMapPlugin
                         attributeXML += String.Format("<link-entity name=\"{0}\" from=\"{0}id\" to=\"customerid\" link-type=\"outer\" alias=\"{1}\">", group.Key.linkentity, group.Key.lookupname);
                     else
                         attributeXML += String.Format("<link-entity name=\"{0}\" to=\"{1}\" link-type=\"outer\" alias=\"{1}\">", group.Key.linkentity, group.Key.lookupname);
-                    //result += String.Format("<attribute name=\"{0}id\" />", group.Key.linkentity);
                 }
 
                 foreach (attribute att in group)
