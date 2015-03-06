@@ -9,7 +9,6 @@
 	<script type="text/javascript" id="BingMapScript"></script>
 	<script type="text/javascript">
 		var chartMap = chartMap || {
-			Settings: new Object(),
 			allPins: new Array(),
 			init: function () {
 				chartMap.getWindowParameters();    // Sync
@@ -32,9 +31,6 @@
 					function (result) {
 						chartMap.PresentationDescription = JSON.parse(result.PresentationDescription);
 						chartMap.DataDescription = JSON.parse(result.DataDescription);
-
-						chartMap.DataDescription.Latitude = (typeof chartMap.DataDescription.LatitudeField === 'string') ? chartMap.DataDescription.LatitudeField.toLowerCase() : "";
-						chartMap.DataDescription.Longitude = (typeof chartMap.DataDescription.LongitudeField === 'string') ? chartMap.DataDescription.LongitudeField.toLowerCase() : "";
 					},
 					function (error) { chartMap.ShowErrorOnMap("There was a problem loading the map configuration"); }
 				);
@@ -44,16 +40,21 @@
 					"Organization",
 					"$select=BingMapsApiKey&$top=1",
 					function (results) {  //successCallback
-						chartMap.Settings.BingKey = results[0].BingMapsApiKey;
+						chartMap.BingKey = results[0].BingMapsApiKey || "nokey";
 						chartMap.loadBingMapScript();
 					},
 					function (error) { //errorCallback
-						chartMap.Settings.BingKey = "";
+						chartMap.BingKey = "nokey";
 						chartMap.ShowErrorOnMap("Failed to Retrieve API Key");
 					}
 				);
 			},
 			loadBingMapScript: function () {
+				if (!chartMap.DataDescription) {
+					setTimeout(chartMap.loadBingMapScript, 10);
+					return;
+				}
+
 				var bingMapScript = document.getElementById("BingMapScript");
 				bingMapScript.onload = function () { chartMap.loadMap(); };
 				bingMapScript.src = location.protocol + "//" + chartMap.DataDescription.BingMapScriptUrl + ((location.protocol === "https:") ? "&s=1" : "");
@@ -85,14 +86,14 @@
 				}
 			},
 			initBingMap: function () {
-				if (!chartMap.Settings.BingKey) {
+				if (!chartMap.BingKey) {
 					setTimeout(chartMap.initBingMap, 10);
 					return;
 				}
 
 				if (Microsoft.Maps.Search && Microsoft.Maps.Themes) {
 					chartMap.BingMap = chartMap.BingMap || new Microsoft.Maps.Map(document.getElementById("mapDiv"), {
-						credentials: chartMap.Settings.BingKey,
+						credentials: chartMap.BingKey,
 						enableClickableLogo: false,
 						showDashboard: false,
 						enableSearchLogo: false,
@@ -164,6 +165,12 @@
 			},
 			buildFetchXML: function (fetchXMLString) {
 				var result = chartMap.DataDescription.fetchXML;
+
+				// TODO: use XPATH for this (dd_xmlparser.js)
+				// 1. remove all attribute nodes
+				// 2. add our address attributes
+				// everything else stays the same, except maybe page/count
+
 				if (!chartMap.PresentationDescription.ShowAllRecords) {  // If showallrecords is true, then it will already be defaulted to "count=5000" and "page=1"
 					result = result.replace('count="250"', fetchXMLString.match(/count=".*?"/));
 					result = result.replace('page="1"', fetchXMLString.match(/page=".*?"/));
@@ -187,8 +194,8 @@
 					this.Id = crmEntity.id;
 					this.Address = crmEntity.compositeAddress;
 					this.EntityType = chartMap.entityTypeName;
-					this.latitude = crmEntity[chartMap.DataDescription.Latitude];
-					this.longitude = crmEntity[chartMap.DataDescription.Longitude];
+					this.latitude = crmEntity[chartMap.DataDescription.LatitudeField];
+					this.longitude = crmEntity[chartMap.DataDescription.LongitudeField];
 					this.weight = crmEntity[chartMap.DataDescription.NumericField] || 0;
 				};
 				var mapConfig = chartMap.DataDescription;
@@ -237,7 +244,7 @@
 					chartMap.allPins.push(pinData);
 
 					if (chartMap.PresentationDescription.EnableCaching) {
-						chartMap.updateCoordinates(pinData.Id, pinData.EntityType, pinData.longitude, pinData.latitude);
+						chartMap.updateCoordinates(pinData.Id, chartMap.DataDescription.EntitySchemaName, pinData.longitude, pinData.latitude);
 					}
 				}
 
@@ -283,7 +290,7 @@
 			},
 			createPin: function (data, pinInfo) {
 				var pin = {};
-				pin.pin = new Microsoft.Maps.Pushpin(pinInfo.center, { typeName: chartMap.PresentationDescription.PinSize });
+				pin.pin = new Microsoft.Maps.Pushpin(pinInfo.center);
 				pin.infobox = new Microsoft.Maps.Infobox(
 					pinInfo.center,
 					{
@@ -308,10 +315,10 @@
 			},
 			updateCoordinates: function (id, type, longitude, latitude) {
 				var record = {};
-				record[chartMap.DataDescription.LatitudeField] = latitude;
-				record[chartMap.DataDescription.LongitudeField] = longitude;
+				record[chartMap.DataDescription.LatitudeSchemaName] = latitude;
+				record[chartMap.DataDescription.LongitudeSchemaName] = longitude;
 
-				dd_CRMService.Update(id, record, chartMap.DataDescription.EntitySchemaName, null, null);
+				dd_CRMService.Update(id, record, type, null, null);
 			},
 			calculateRange: function () {
 				if (chartMap.allPins.Range == 1) {  // Calculated Range

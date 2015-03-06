@@ -34,10 +34,8 @@ function setBingMapsKey() {  // Called from the ribbon button
 }
 
 function SetApiKeyDisplayRule() {
-	debugger;
-	return true;
 	// This button only applies to CRM Online.  OnPrem users should use the System Settings page.
-	//return Xrm.Page.context.getClientUrl().indexOf("crm.dynamics.com") > -1;
+	return Xrm.Page.context.getClientUrl().indexOf("crm.dynamics.com") > -1;
 }
 
 function enableCaching_onChange() {

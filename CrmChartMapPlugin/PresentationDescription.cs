@@ -26,8 +26,6 @@ namespace CrmChartMap.CrmChartMapPlugin
         public int ClusterRadius;
         [DataMember]
         public string ClusterTitle;
-        [DataMember]
-        public string pinSize;
 
         // Heat Map Attributes
         [DataMember]
@@ -70,7 +68,6 @@ namespace CrmChartMap.CrmChartMapPlugin
                 EnableClustering = entity.GetAttributeValue<bool>("dd_enableclustering"),
                 ClusterRadius = entity.GetAttributeValue<int>("dd_clusterradius"),
                 ClusterTitle = entity.GetAttributeValue<string>("dd_clustername"),
-                pinSize = ((PinType)entity.GetAttributeValue<OptionSetValue>("dd_pinsize").Value).ToString(),
 
                 HeatMapType = entity.GetAttributeValue<OptionSetValue>("dd_heatmapbasedon").Value,
                 Intensity = entity.GetAttributeValue<decimal>("dd_intensity"),
@@ -102,11 +99,6 @@ namespace CrmChartMap.CrmChartMapPlugin
         {
             meters,
             pixels
-        }
-        public enum PinType
-        {
-            standard,
-            micro
         }
     }
 }

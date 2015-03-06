@@ -24,7 +24,8 @@ namespace CrmChartMap.CrmChartMapPlugin
 		/// <summary>
 		/// Initializes a new instance of the <see cref="PostChartMapEntityCreate"/> class.
 		/// </summary>
-		public PostChartMapEntityCreate() : base(typeof(PostChartMapEntityCreate))
+		public PostChartMapEntityCreate()
+			: base(typeof(PostChartMapEntityCreate))
 		{
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "Create", "dd_chartmapentity", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
 			base.RegisteredEvents.Add(new Tuple<int, string, string, Action<LocalPluginContext>>(40, "Update", "dd_chartmapentity", new Action<LocalPluginContext>(ExecutePostChartMapEntity)));
@@ -131,6 +132,25 @@ namespace CrmChartMap.CrmChartMapPlugin
 
 				Service.Update(mapChart);
 				tracingService.Trace("Chart map config successfully updated");
+
+				PublishEntity(PostImage.LogicalName);
+			}
+
+			public void PublishEntity(string EntityName)
+			{
+				tracingService.Trace("Now Publishing updated chart");
+
+				OrganizationRequest publishRequest = new OrganizationRequest()
+				{
+					Parameters = new ParameterCollection()
+					{
+						{ "ParameterXml", String.Format("<importexportxml><entities><entity>{0}</entity></entities></importexportxml>", EntityName) }
+					}
+				};
+
+				Service.Execute(publishRequest);
+
+				tracingService.Trace("Chart successfully published.");
 			}
 		}
 
@@ -183,7 +203,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 				tracingService.Trace("Beginning PostPublishAll");
 
 				// Create Defaults
-				if (!dataContext.CreateQuery("dd_chartmapentity").ToList().Any())
+				if (!dataContext.CreateQuery("dd_chartmapentity").Select(c => c.GetAttributeValue<Guid>("dd_chartmapentityid")).ToList().Any())
 				{
 					tracingService.Trace("Creating predefined maps for Account,Contact,Lead and Opportunity entities");
 					CreateChartConfig("account", "Account Locations", "name", "Displays Account locations on a Bing Map.", "address1_city", "address1_line1", "address1_postalcode", "address1_stateorprovince", "address1_country", "address1_latitude", "address1_longitude", "Multiple Accounts");
@@ -195,6 +215,8 @@ namespace CrmChartMap.CrmChartMapPlugin
 				else
 				{
 					#region Convert Existing Charts to new format
+
+					#region Legacy Conversion
 					// this bit can be removed in the future, once there are no legacy instances
 					// find all records, and fill in config values if blank
 					tracingService.Trace("Try to find ChartMapConfig.js");
@@ -210,6 +232,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 					{
 						tracingService.Trace("Config file exists");
 						configSettings = ChartMapConfig.getConfig(chartMapConfigRecord);
+						SetBingKey(configSettings.BingKey);
 					}
 
 					var allConfigRecords = dataContext.CreateQuery("dd_chartmapentity")
@@ -229,27 +252,77 @@ namespace CrmChartMap.CrmChartMapPlugin
 						Entity updatedConfig = new Entity("dd_chartmapentity");
 						updatedConfig.Id = chartMapConfig.Id;
 
+						bool updateNeeded = false;
 						if (!chartMapConfig.HasZoom)
+						{
 							updatedConfig["dd_zoom"] = configSettings.Zoom;
+							updateNeeded = true;
+						}
 						if (!chartMapConfig.HasLatitude)
+						{
 							updatedConfig["dd_latitude"] = configSettings.CenterLat;
+							updateNeeded = true;
+						}
 						if (!chartMapConfig.HasLongitude)
+						{
 							updatedConfig["dd_longitude"] = configSettings.CenterLong;
+							updateNeeded = true;
+						}
 						if (!chartMapConfig.HasLanguage)
+						{
 							updatedConfig["dd_language"] = new OptionSetValue(DataDescription.LangCodes.Single(l => l.Value == configSettings.Lang).Key);
+							updateNeeded = true;
+						}
 						if (!chartMapConfig.HasEnableCaching)
+						{
 							updatedConfig["dd_enablecaching"] = false;
+							updateNeeded = true;
+						}
 						if (!chartMapConfig.HasShowAllRecords)
+						{
 							updatedConfig["dd_showallrecords"] = false;
+							updateNeeded = true;
+						}
+					#endregion
 
-						if (!chartMapConfig.HasEnableCaching || !chartMapConfig.HasLanguage || !chartMapConfig.HasLatitude || !chartMapConfig.HasLongitude || !chartMapConfig.HasShowAllRecords || !chartMapConfig.HasZoom)
+						if (updateNeeded)
+						{
 							Service.Update(updatedConfig);
+						}
+						else
+						{
+							// Force update chart to latest version
+							updatedConfig["dd_fetchattributes"] = "";  // This is just an old field, not used anymore.  Being used here to force the update.
+							Service.Update(updatedConfig);
+						}
 					}
 					#endregion
 				}
 
 				// Remove this plugin step after the first time it runs successfully
 				deletePluginStep("CrmChartMap.PostPublishAll");
+			}
+
+			private void SetBingKey(string key)
+			{
+				tracingService.Trace("Saving Bing Maps API Key to Organization Settings");
+
+				var orgSettings = dataContext.CreateQuery("organization").Select(o => new { Id = o.GetAttributeValue<Guid>("organizationid"), ApiKey = o.GetAttributeValue<string>("bingmapsapikey") }).First();
+
+				if (String.IsNullOrWhiteSpace(orgSettings.ApiKey))
+				{
+					Entity updatedOrg = new Entity("organization");
+					updatedOrg.Id = orgSettings.Id;
+					updatedOrg["bingmapsapikey"] = key;
+
+					Service.Update(updatedOrg);
+					tracingService.Trace("Successfully added Bing Maps API Key to Organization Settings");
+				}
+				else
+				{
+					tracingService.Trace("Organization has an existing key.  Leaving it alone, no changes performed.");
+				}
+
 			}
 
 			private void deletePluginStep(string name)
