@@ -45,6 +45,11 @@ namespace CrmChartMap.CrmChartMapPlugin
             return Guid.Parse(s);
         }
 
+		public static string ToFormattedString(this Guid id)
+		{
+			return id.ToString("B").ToUpper();
+		}
+
         public static T ParseJSON<T>(this string jsonString)
         {
             if (String.IsNullOrWhiteSpace(jsonString))

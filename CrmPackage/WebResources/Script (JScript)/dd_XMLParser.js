@@ -1,5 +1,5 @@
-﻿var XMLParser = XMLParser || {  // XML Parser functions
-	ProcessSoapResponse: function (responseXml, Callback) {
+﻿var XMLParser = (function (XMLParser) {  // XML Parser functions
+	XMLParser.ProcessSoapResponse = function ProcessSoapResponse(responseXml, Callback) {
 		try {
 			var namespaces = [
 				"xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'",
@@ -10,10 +10,10 @@
 			responseXml.setProperty("SelectionNamespaces", namespaces.join(" "));
 		} catch (e) { }
 
-		var resultNodes = this._selectNodes(responseXml, "//a:Entities/a:Entity");
-		Callback(this.ObjectifyEntities(resultNodes));
-	},
-	ProcessSoapError: function (responseXml, Callback) {
+		var resultNodes = _selectNodes(responseXml, "//a:Entities/a:Entity");
+		Callback(ObjectifyEntities(resultNodes));
+	}
+	XMLParser.ProcessSoapError = function ProcessSoapError(responseXml, Callback) {
 		try {
 			var namespaces = [
 				"xmlns:s='http://schemas.xmlsoap.org/soap/envelope/'",
@@ -24,27 +24,27 @@
 			responseXml.setProperty("SelectionNamespaces", namespaces.join(" "));
 		} catch (e) { }
 
-		var errorNode = this._selectSingleNode(responseXml, "//s:Fault/faultstring");
-		Callback(Error(this._getNodeText(errorNode)));
-	},
-	ObjectifyEntities: function (nodes) {
+		var errorNode = _selectSingleNode(responseXml, "//s:Fault/faultstring");
+		Callback(Error(_getNodeText(errorNode)));
+	}
+	function ObjectifyEntities(nodes) {
 		var result = [];
 		for (var i = 0; i < nodes.length; i++) {
-			result.push(this.ObjectifyEntity(nodes[i]));
+			result.push(ObjectifyEntity(nodes[i]));
 		}
 		return result;
-	},
-	ObjectifyNodes: function (nodes) {
+	}
+	function ObjectifyNodes(nodes) {
 		var result = {};
 		for (var i = 0; i < nodes.length; i++) {
-			var fieldName = this._getNodeText(nodes[i].firstChild);
+			var fieldName = _getNodeText(nodes[i].firstChild);
 			var fieldValue = nodes[i].childNodes[1];
-			result[fieldName] = this.ObjectifyNode(fieldValue);
+			result[fieldName] = ObjectifyNode(fieldValue);
 		}
 
 		return result;
-	},
-	ObjectifyNode: function (node) {
+	}
+	function ObjectifyNode(node) {
 		if (node.attributes != null) {
 			if (node.attributes.getNamedItem("i:nil") != null && node.attributes.getNamedItem("i:nil").nodeValue == "true") {
 				return null;
@@ -55,84 +55,84 @@
 			switch (nodeTypeName) {
 				case "a:EntityReference":
 					return {
-						id: this._getNodeText(node.childNodes[0]),
-						entityType: this._getNodeText(node.childNodes[1])
+						id: _getNodeText(node.childNodes[0]),
+						entityType: _getNodeText(node.childNodes[1])
 					};
 				case "a:AliasedValue":
-					return this._getNodeText(node.childNodes[2]);
+					return _getNodeText(node.childNodes[2]);
 				case "a:Entity":
-					return this.ObjectifyRecord(node);
+					return ObjectifyRecord(node);
 				case "a:EntityCollection":
-					return this.ObjectifyCollection(node.firstChild);
+					return ObjectifyCollection(node.firstChild);
 				case "c:dateTime":
-					return this.ParseIsoDate(this._getNodeText(node));
+					return ParseIsoDate(_getNodeText(node));
 				case "c:guid":
 				case "c:string":
-					return this._getNodeText(node);
+					return _getNodeText(node);
 				case "c:int":
-					return parseInt(this._getNodeText(node));
+					return parseInt(_getNodeText(node));
 				case "a:OptionSetValue":
-					return parseInt(this._getNodeText(node.childNodes[0]));
+					return parseInt(_getNodeText(node.childNodes[0]));
 				case "c:boolean":
-					return this._getNodeText(node.childNodes[0]) == "true";
+					return _getNodeText(node.childNodes[0]) == "true";
 				case "c:double":
 				case "c:decimal":
 				case "a:Money":
-					return parseFloat(this._getNodeText(node.childNodes[0]));
+					return parseFloat(_getNodeText(node.childNodes[0]));
 				default:
 					return null;
 			}
 		}
 
 		return null;
-	},
-	ObjectifyCollection: function (node) {
+	}
+	function ObjectifyCollection(node) {
 		var result = [];
 		for (var i = 0; i < node.childNodes.length; i++) {
-			result.push(this.ObjectifyRecord(node.childNodes[i]));
+			result.push(ObjectifyRecord(node.childNodes[i]));
 		}
 
 		return result;
-	},
-	ObjectifyEntity: function (node) {
+	}
+	function ObjectifyEntity(node) {
 		var result = {};
 
-		result = this.ObjectifyNodes(node.childNodes[0].childNodes);
+		result = ObjectifyNodes(node.childNodes[0].childNodes);
 		result.logicalName = (node.childNodes[4].text != undefined) ? node.childNodes[4].text : node.childNodes[4].textContent;
 		result.id = (node.childNodes[3].text != undefined) ? node.childNodes[3].text : node.childNodes[3].textContent;
 
 		return result;
-	},
-	ObjectifyRecord: function (node) {
+	}
+	function ObjectifyRecord(node) {
 		var result = {};
 
 		result.logicalName = (node.childNodes[4].text != undefined) ? node.childNodes[4].text : node.childNodes[4].textContent;
 		result.id = (node.childNodes[3].text != undefined) ? node.childNodes[3].text : node.childNodes[3].textContent;
 
-		result.attributes = this.ObjectifyNodes(node.childNodes[0].childNodes);
-		result.formattedValues = this.ObjectifyNodes(node.childNodes[2].childNodes);
+		result.attributes = ObjectifyNodes(node.childNodes[0].childNodes);
+		result.formattedValues = ObjectifyNodes(node.childNodes[2].childNodes);
 
 		return result;
-	},
-	ParseIsoDate: function (s) {
-		if (s == null || !s.match(this.isoDateExpression))
+	}
+	function ParseIsoDate(s) {
+		if (s == null || !s.match(isoDateExpression))
 			return null;
 
-		var dateParts = this.isoDateExpression.exec(s);
+		var dateParts = isoDateExpression.exec(s);
 		return new Date(Date.UTC(parseInt(dateParts[1], 10),
 			parseInt(dateParts[2], 10) - 1,
 			parseInt(dateParts[3], 10),
-                parseInt(dateParts[4], 10) - (dateParts[8] == "" || dateParts[8] == "Z" ? 0 : parseInt(dateParts[8])),
+			parseInt(dateParts[4], 10) - (dateParts[8] == "" || dateParts[8] == "Z" ? 0 : parseInt(dateParts[8])),
 			parseInt(dateParts[5], 10),
 			parseInt(dateParts[6], 10)));
-	},
-	_selectNodes: function (node, xPathExpression) {
+	}
+	function _selectNodes(node, xPathExpression) {
 		if (typeof (node.selectNodes) != "undefined") {
 			return node.selectNodes(xPathExpression);
 		}
 		else {
 			var output = [];
-			var xPathResults = node.evaluate(xPathExpression, node, this._NSResolver, XPathResult.ANY_TYPE, null);
+			var xPathResults = node.evaluate(xPathExpression, node, _NSResolver, XPathResult.ANY_TYPE, null);
 			var result = xPathResults.iterateNext();
 			while (result) {
 				output.push(result);
@@ -140,26 +140,26 @@
 			}
 			return output;
 		}
-	},
-	_selectSingleNode: function (node, xpathExpr) {
+	}
+	function _selectSingleNode(node, xpathExpr) {
 		if (typeof (node.selectSingleNode) != "undefined") {
 			return node.selectSingleNode(xpathExpr);
 		}
 		else {
 			var xpe = new XPathEvaluator();
-			var xPathNode = xpe.evaluate(xpathExpr, node, this._NSResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+			var xPathNode = xpe.evaluate(xpathExpr, node, _NSResolver, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
 			return (xPathNode != null) ? xPathNode.singleNodeValue : null;
 		}
-	},
-	_getNodeText: function (node) {
+	}
+	function _getNodeText(node) {
 		if (typeof (node.text) != "undefined") {
 			return node.text;
 		}
 		else {
 			return node.textContent;
 		}
-	},
-	_isNodeNull: function (node) {
+	}
+	function _isNodeNull(node) {
 		if (node == null) {
 			return true;
 		}
@@ -168,16 +168,16 @@
 			return true;
 		}
 		return false;
-	},
-	_getNodeName: function (node) {
+	}
+	function _getNodeName(node) {
 		if (typeof (node.baseName) != "undefined") {
 			return node.baseName;
 		}
 		else {
 			return node.localName;
 		}
-	},
-	_NSResolver: function (prefix) {
+	}
+	function _NSResolver(prefix) {
 		var ns = {
 			"s": "http://schemas.xmlsoap.org/soap/envelope/",
 			"a": "http://schemas.microsoft.com/xrm/2011/Contracts",
@@ -186,7 +186,9 @@
 			"c": "http://schemas.datacontract.org/2004/07/System.Collections.Generic"
 		};
 		return ns[prefix] || null;
-	},
-	isoDateExpression: /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.?(\d*)?(Z|[+-]\d{2}?(:\d{2})?)?$/,
-	__namespace: true
-}
+	}
+	var isoDateExpression = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.?(\d*)?(Z|[+-]\d{2}?(:\d{2})?)?$/;
+	//__namespace: true
+
+	return XMLParser;
+}(XMLParser || {}));
