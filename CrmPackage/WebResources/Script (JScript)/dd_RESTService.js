@@ -1,4 +1,4 @@
-﻿var dd_CRMService = dd_CRMService || new function () {
+﻿var dd_CRMService = (function (dd_CRMService) {
 	function _ODataPath() {
 		return Xrm.Page.context.getClientUrl() + "/XRMServices/2011/OrganizationData.svc/";
 	}
@@ -35,7 +35,7 @@
 			  req.status + ": " +
 			  req.statusText + ": " + errorText);
 	}
-	function Create(object, type, successCallback, errorCallback) {
+	dd_CRMService.Create = function Create(object, type, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -57,7 +57,7 @@
 		};
 		req.send(JSON.stringify(object));
 	}
-	function Retrieve(id, type, select, expand, successCallback, errorCallback) {
+	dd_CRMService.Retrieve = function Retrieve(id, type, select, expand, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -95,7 +95,7 @@
 		};
 		req.send();
 	}
-	function Update(id, object, type, successCallback, errorCallback) {
+	dd_CRMService.Update = function Update(id, object, type, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -118,7 +118,7 @@
 		};
 		req.send(JSON.stringify(object));
 	}
-	function Delete(id, type, successCallback, errorCallback) {
+	dd_CRMService.Delete = function Delete(id, type, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -141,7 +141,7 @@
 		};
 		req.send();
 	}
-	function RetrieveMultiple(type, options, successCallback, errorCallback) {
+	dd_CRMService.RetrieveMultiple = function RetrieveMultiple(type, options, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -180,7 +180,7 @@
 		};
 		req.send();
 	}
-	function RetrieveFetchXml(requestXml, successCallback, errorCallback) {
+	dd_CRMService.RetrieveFetchXml = function RetrieveFetchXml(requestXml, successCallback, errorCallback) {
 		var async = !!successCallback;
 		successCallback = successCallback || function (result) { return result; };
 		errorCallback = errorCallback || function (result) { return result; };
@@ -215,12 +215,5 @@
 			 	  </s:Envelope>");
 	}
 
-	return {
-		Create: Create,
-		Retrieve: Retrieve,
-		RetrieveMultiple: RetrieveMultiple,
-		RetrieveFetchXml: RetrieveFetchXml,
-		Update: Update,
-		Delete: Delete
-	};
-};
+	return dd_CRMService;
+}(dd_CRMService || {}));

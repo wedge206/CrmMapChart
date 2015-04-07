@@ -96,8 +96,8 @@ namespace CrmChartMap.CrmChartMapPlugin
                         { "primaryentitytypecode", Target.GetAttributeValue<string>("dd_entity")},
                         { "name", Target.GetAttributeValue<string>("dd_chartname") } ,
                         { "description", Target.GetAttributeValue<string>("dd_chartdescription") },
-                        { "datadescription", DataDescription.FromEntity(Target).ToJSON() },
-                        { "presentationdescription", PresentationDescription.FromEntity(Target).ToJSON() },
+                        { "datadescription", new DataDescription(Target).ToJSON() },
+                        { "presentationdescription", new PresentationDescription(Target).ToJSON() },
                         { "webresourceid", new EntityReference("webresource", chartMapId) },
                         { "isdefault", false}
                     }
@@ -111,7 +111,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 					Id = Target.Id,
 					Attributes = new AttributeCollection()
                     {
-                        { "dd_chartid", chartId.ToString("B").ToUpper() }  // Can't have relationships with charts, so we have to store the guid as a string, boo...
+                        { "dd_chartid", chartId.ToFormattedString() }  // Can't have relationships with charts, so we have to store the guid as a string, boo...
                     }
 				};
 
@@ -125,8 +125,8 @@ namespace CrmChartMap.CrmChartMapPlugin
 				{
 					Id = PostImage.GetAttributeValue<string>("dd_chartid").ToGuid(),
 					Attributes = new AttributeCollection() {
-                        { "datadescription", DataDescription.FromEntity(PostImage).ToJSON() },
-                        { "presentationdescription", PresentationDescription.FromEntity(PostImage).ToJSON() }
+                        { "datadescription", new DataDescription(PostImage).ToJSON() },
+                        { "presentationdescription", new PresentationDescription(PostImage).ToJSON() }
                     }
 				};
 
@@ -140,11 +140,11 @@ namespace CrmChartMap.CrmChartMapPlugin
 			{
 				tracingService.Trace("Now Publishing updated chart");
 
-				OrganizationRequest publishRequest = new OrganizationRequest()
+				OrganizationRequest publishRequest = new OrganizationRequest("PublishXml")
 				{
 					Parameters = new ParameterCollection()
 					{
-						{ "ParameterXml", String.Format("<importexportxml><entities><entity>{0}</entity></entities></importexportxml>", EntityName) }
+						{ "ParameterXml", String.Format("<importexportxml><entities><entity>{0}</entity><entity>savedqueryvisualization</entity></entities></importexportxml>", EntityName) }
 					}
 				};
 
@@ -329,7 +329,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 			{
 				tracingService.Trace("Deleting " + name + " plugin step");
 				Guid stepId = dataContext.CreateQuery("sdkmessageprocessingstep").Where(s => s.GetAttributeValue<string>("name") == name).Select(s => s.Id).Single();
-				tracingService.Trace("Found step id: " + stepId.ToString("B"));
+				tracingService.Trace("Found step id: " + stepId.ToFormattedString());
 
 				Service.Delete("sdkmessageprocessingstep", stepId);
 				tracingService.Trace("Step sucessfully deleted");

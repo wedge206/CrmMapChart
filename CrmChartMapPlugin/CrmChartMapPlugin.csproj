@@ -46,7 +46,7 @@
     <AssemblyOriginatorKeyFile>CrmChartMapStringKey.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.Xrm.Sdk, Version=5.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="Microsoft.Xrm.Sdk, Version=6.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>G:\Wedge\CRM 2013 SP1 R1 SDK\SDK\Bin\Microsoft.Xrm.Sdk.dll</HintPath>
     </Reference>
