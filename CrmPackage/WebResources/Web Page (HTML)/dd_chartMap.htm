@@ -72,7 +72,7 @@
 				});
 				BingMap.setView({ zoom: DataDescription.CenterZoom, center: new Microsoft.Maps.Location(DataDescription.CenterLat, DataDescription.CenterLong) });
 
-				Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: getSearchManager });
+				Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: function () { config.searchManager = new Microsoft.Maps.Search.SearchManager(BingMap); } });
 				if (PresentationDescription.MapType === 1) {
 					Microsoft.Maps.registerModule("PointBasedClusteringModule", "dd_PointBasedClustering.js");
 					Microsoft.Maps.loadModule("PointBasedClusteringModule", { callback: initPointMap });
@@ -81,13 +81,6 @@
 					Microsoft.Maps.registerModule("HeatMapModule", "dd_HeatMapModule.js");
 					Microsoft.Maps.loadModule("HeatMapModule", { callback: initHeatMap });
 				}
-			}
-			function getSearchManager() {
-				if (!config.searchManager) {
-					while (!Microsoft.Maps.Search) { }
-					config.searchManager = new Microsoft.Maps.Search.SearchManager(BingMap);
-				}
-				return config.searchManager;
 			}
 			function initPointMap() {
 				config.clusterLayer = new PointBasedClusteredEntityCollection(
@@ -115,6 +108,16 @@
 						}
 					}
 				);
+
+				if (PresentationDescription.DynamicRadius) {
+					Microsoft.Maps.Events.addThrottledHandler(BingMap, 'viewchange', rescaleHeatMap, 250);
+				}
+			}
+			function rescaleHeatMap(param) {
+				var MaxZoomRadius = (PresentationDescription.RadiusUnits == "pixels") ? PresentationDescription.Radius : PresentationDescription.Radius / BingMap.getTargetMetersPerPixel()
+				var radius = BingMap.getTargetZoom() / BingMap.getZoomRange().max * MaxZoomRadius;
+
+				config.heatLayer.SetOptions({ radius: radius });
 			}
 			function loadData() {
 				var FetchXml = "";
@@ -165,15 +168,15 @@
 					this.latitude = crmEntity[DataDescription.LatitudeField];
 					this.longitude = crmEntity[DataDescription.LongitudeField];
 					this.weightValue = crmEntity[DataDescription.NumericField] || 0;
+					this.retryCount = 0;
 				};
-				var mapConfig = DataDescription;
-				geocodeTotal = entityList.length;
 
+				geocodeTotal = entityList.length;
 				for (var e in entityList) {
 					var entity = entityList[e];
-					entity.compositeAddress = [entity[mapConfig.AddressField], entity[mapConfig.CityField], entity[mapConfig.StateField], entity[mapConfig.CountryField], entity[mapConfig.PostCodeField]].filter(function(a) { return a != undefined; }).join(", ");
+					entity.compositeAddress = [entity[DataDescription.AddressField], entity[DataDescription.CityField], entity[DataDescription.StateField], entity[DataDescription.CountryField], entity[DataDescription.PostCodeField]].filter(function (a) { return a != undefined; }).join(", ");
 
-					if (entity[mapConfig.LongitudeField] && entity[mapConfig.LatitudeField]) {  // We already have the coordinates
+					if (entity[DataDescription.LongitudeField] && entity[DataDescription.LatitudeField]) {  // We already have the coordinates
 						allPins.push(new pinData(entity));
 						geocodeComplete();
 					}
@@ -186,7 +189,12 @@
 				}
 			}
 			function sendGeocodeRequest(searchString, pinData) {
-				getSearchManager().geocode({
+				if (!config.searchManager) {
+					setTimeout(sendGeocodeRequest, 10, searchString, pinData);
+					return;
+				}
+
+				config.searchManager.geocode({
 					where: searchString,
 					count: 1,
 					callback: onGeocodeSuccess,
@@ -195,6 +203,10 @@
 				});
 			}
 			function onGeocodeSuccess(result, pinData) {
+				var CRMRecord = function CRMRecord(latitude, longitude) {  // Class for records to be updated
+					this[DataDescription.LatitudeSchemaName] = latitude;
+					this[DataDescription.LongitudeSchemaName] = longitude;
+				}
 				var topResult = result.results && result.results[0];
 				if (topResult) {
 					pinData.latitude = topResult.location.latitude;
@@ -207,11 +219,12 @@
 				}
 				geocodeComplete();
 			}
-			function CRMRecord(latitude, longitude) {  // Class for records to be updated
-				this[DataDescription.LatitudeSchemaName] = latitude;
-				this[DataDescription.LongitudeSchemaName] = longitude;
-			}
-			function onGeocodeFail(result, pinData) {
+			function onGeocodeFail(result) {
+				if (result.userData.retryCount < 3) {
+					setTimeout(sendGeocodeRequest, 100, result.where, result.userData);  // Short delay and retry the failed record.
+					return;
+				}
+
 				geocodeComplete();
 			}
 			function geocodeComplete() {
@@ -267,9 +280,7 @@
 				config.heatLayer.SetPoints(allPins);
 			}
 			function calculateIntensity() {
-				var Max, Min, ScaleFactor = 0;
-				//var Range = (PresentationDescription.HeatMapType === 2) ? PresentationDescription.IntensityRange : 0;
-				//if (Range == 1) {  // Calculated Range
+				var Max, Min, NegativeOffset = 0;
 				if (PresentationDescription.HeatMapType === 2 && PresentationDescription.IntensityRange === 1) {  // Calculated Range
 					var weightArray = allPins.map(function(x) { return x.weightValue; });
 					if (PresentationDescription.IntensityCalculation == 2) {  // Standard Deviation
@@ -284,8 +295,8 @@
 						Min = Math.min.apply(null, weightArray)
 					}
 					if (Min < 0) {  // We now support displaying negative values on the heatmap, sooo...  TODO: add a config option to actually display them or not
-						ScaleFactor = -1 * Min;
-						Max += ScaleFactor;
+						NegativeOffset = Math.abs(Min);
+						Max += NegativeOffset;
 						Min = 0;
 					}
 				}
@@ -295,10 +306,10 @@
 				}
 
 				for (var i = 0; i < allPins.length; i++) {  // Set specific intensity values for use in Heat Map
-					var intensity = ((allPins[i].weightValue + ScaleFactor - Min) / (Max - Min)).toFixed(2);
-					intensity = (intensity <= 0) ? 0.01 : intensity;  // Safety net  // I don't remember if 0 is allowed...
-					intensity = (intensity > 1) ? 1 : intensity;  // Safety net
-					allPins[i].intensity = intensity;
+					var pinIntensity = ((allPins[i].weightValue + NegativeOffset - Min) / (Max - Min)).toFixed(2);
+					pinIntensity = (pinIntensity <= 0) ? 0.01 : pinIntensity;  // Safety net
+					pinIntensity = (pinIntensity > 1) ? 1 : pinIntensity;  // Safety net
+					allPins[i].intensity = pinIntensity;
 				}
 			}
 			function ShowErrorOnMap(errorMessage) {
@@ -343,7 +354,7 @@
 					return (numOfDec) ? Math.round(pow10s * num) / pow10s : num;
 				}
 				function getVariance(numArr, numOfDec) {
-					var avg = getAverage(numArr, numOfDec), i = numArr.length, v = 0;
+					var avg = stdDev.getAverage(numArr, numOfDec), i = numArr.length, v = 0;
 					while (i--) {
 						v += Math.pow((numArr[i] - avg), 2);
 					}
@@ -351,7 +362,7 @@
 					return getNumWithSetDec(v, numOfDec);
 				}
 				return stdDev;
-			})
+			}(stdDev || {}))
 			return chartMap;
 		}(chartMap || {}));
 	</script>

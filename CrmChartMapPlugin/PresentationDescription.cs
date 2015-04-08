@@ -47,6 +47,8 @@ namespace CrmChartMap.CrmChartMapPlugin
 		[DataMember]
 		public string RadiusUnits;
 		[DataMember]
+		public bool DynamicRadius;
+		[DataMember]
 		public string Colour1;
 		[DataMember]
 		public string Colour2;
@@ -78,6 +80,7 @@ namespace CrmChartMap.CrmChartMapPlugin
 			MinValue = entity.GetAttributeValue<decimal>("dd_minimumvalue");
 			Radius = entity.GetAttributeValue<int>("dd_radius");
 			RadiusUnits = entity.GetAttributeValue<bool>("dd_RadiusUnits") ? Units.meters.ToString() : Units.pixels.ToString();
+			DynamicRadius = entity.GetAttributeValue<bool>("dd_usedynamicradius");
 			Colour1 = makeColor(entity.GetAttributeValue<OptionSetValue>("dd_colourstop1") != null ? entity.GetAttributeValue<OptionSetValue>("dd_colourstop1").Value : 1128000128, 10);
 			Colour2 = makeColor(entity.GetAttributeValue<OptionSetValue>("dd_colourstop2") != null ? entity.GetAttributeValue<OptionSetValue>("dd_colourstop2").Value : 1000000255, 40);
 			Colour3 = makeColor(entity.GetAttributeValue<OptionSetValue>("dd_colourstop3") != null ? entity.GetAttributeValue<OptionSetValue>("dd_colourstop3").Value : 1000128000, 80);
