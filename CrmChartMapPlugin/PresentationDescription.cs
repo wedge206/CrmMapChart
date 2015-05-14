@@ -2,9 +2,8 @@
 using System.Linq;
 using System.Text;
 using System.Collections.Generic;
-
-using Microsoft.Xrm.Sdk;
 using System.Runtime.Serialization;
+using Microsoft.Xrm.Sdk;
 
 namespace CrmChartMap.CrmChartMapPlugin
 {

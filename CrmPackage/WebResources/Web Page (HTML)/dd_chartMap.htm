@@ -3,13 +3,14 @@
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 	<title>Locations on Bing Maps</title>
+	<script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
 	<script type="text/javascript" src="dd_XMLParser.js"></script>
 	<script type="text/javascript" src="dd_RESTService.js"></script>
-	<script type="text/javascript" src="ClientGlobalContext.js.aspx"></script>
 	<script type="text/javascript" id="BingMapScript"></script>
 	<script type="text/javascript">
-		var chartMap = (function(chartMap) {
-			var allPins = [], config = {}, BingMap, PresentationDescription, DataDescription, geocodeCompleted = 0, geocodeTotal = 0;
+		var chartMap = (function (chartMap) {
+			// TODO: Add DataDescription options for maxConcurrentRequests, maxRetryCount, and retryDelay from the UI
+			var BingMap, allPins = [], config = { geocodeCompleted: 0, concurrentRequestCount: 0, maxConcurrentRequests: 500, maxRetryCount: 5, retryDelay: 100 }, PresentationDescription, DataDescription;
 			chartMap.init = function init() {
 				retrieveBingMapAPIKey();
 				loadChartConfig();
@@ -22,36 +23,31 @@
 				config.viewId = dataParam["viewid"];
 
 				dd_CRMService.Retrieve(
-					config.chartId, "SavedQueryVisualization",
-					null, null,
-					function(result) {
+					config.chartId, "SavedQueryVisualization", "DataDescription,PresentationDescription", null,
+					function (result) {
 						PresentationDescription = JSON.parse(result.PresentationDescription);
 						DataDescription = JSON.parse(result.DataDescription);
 						loadBingMapScript();
-						loadData();
+						getFetchXml();
 					},
-					function(error) { ShowErrorOnMap("There was a problem loading the map configuration"); }
+					function (error) { }
 				);
 			}
 			function retrieveBingMapAPIKey() {
 				dd_CRMService.RetrieveMultiple(
 					"Organization", "$select=BingMapsApiKey&$top=1",
-					function(results) {  //successCallback
-						config.BingKey = results[0].BingMapsApiKey || "nokey";
-					},
-					function(error) { //errorCallback
-						ShowErrorOnMap("Failed to Retrieve API Key");
-					}
+					function (results) { config.BingKey = results[0].BingMapsApiKey || "nokey"; },
+					function (error) { config.BingKey = "nokey"; }
 				);
 			}
 			function loadBingMapScript() {
 				var bingMapScript = document.getElementById("BingMapScript");
-				bingMapScript.onload = loadMap;
+				bingMapScript.onload = loadBingMap;
 				bingMapScript.src = location.protocol + "//" + DataDescription.BingMapScriptUrl + (location.protocol === "https:" ? "&s=1" : "");
 			}
-			function loadMap() {
+			function loadBingMap() {
 				if (typeof Microsoft === "undefined" || !Microsoft.Maps || !Microsoft.Maps.loadModule) {
-					setTimeout(loadMap, 10);
+					setTimeout(loadBingMap, 10);
 					return;
 				}
 
@@ -63,14 +59,14 @@
 					return;
 				}
 
-				BingMap = new Microsoft.Maps.Map(document.getElementById("BingMap"), {
+				BingMap = new Microsoft.Maps.Map(document.getElementById("BingMapDiv"), {
 					credentials: config.BingKey,
 					enableClickableLogo: false,
 					showDashboard: false,
 					enableSearchLogo: false,
 					theme: new Microsoft.Maps.Themes.BingTheme()
 				});
-				BingMap.setView({ zoom: DataDescription.CenterZoom, center: new Microsoft.Maps.Location(DataDescription.CenterLat, DataDescription.CenterLong) });
+				BingMap.setView({ zoom: DataDescription.CenterZoom, center: new Microsoft.Maps.Location(DataDescription.CenterLat, DataDescription.CenterLong) });  // Set default position/zoom level
 
 				Microsoft.Maps.loadModule('Microsoft.Maps.Search', { callback: function () { config.searchManager = new Microsoft.Maps.Search.SearchManager(BingMap); } });
 				if (PresentationDescription.MapType === 1) {
@@ -84,18 +80,16 @@
 			}
 			function initPointMap() {
 				config.clusterLayer = new PointBasedClusteredEntityCollection(
-					BingMap,
-					{
+					BingMap, {
 						singlePinCallback: createPin,
 						clusteredPinCallback: createClusteredPin,
-						clusterRadius: PresentationDescription.EnableClustering ? PresentationDescription.ClusterRadius : -1,
+						clusterRadius: PresentationDescription.EnableClustering ? PresentationDescription.ClusterRadius : -1
 					}
 				);
 			}
 			function initHeatMap() {
 				config.heatLayer = new HeatMapLayer(
-					BingMap, [],
-					{
+					BingMap, [], {
 						intensity: PresentationDescription.Intensity,
 						radius: PresentationDescription.Radius,
 						unit: PresentationDescription.RadiusUnits,
@@ -109,38 +103,28 @@
 					}
 				);
 
-				if (PresentationDescription.DynamicRadius) {
-					Microsoft.Maps.Events.addThrottledHandler(BingMap, 'viewchange', rescaleHeatMap, 250);
-				}
+				PresentationDescription.DynamicRadius && Microsoft.Maps.Events.addThrottledHandler(BingMap, 'viewchange', rescaleHeatPoints, 250);
 			}
-			function rescaleHeatMap(param) {
-				var MaxZoomRadius = (PresentationDescription.RadiusUnits == "pixels") ? PresentationDescription.Radius : PresentationDescription.Radius / BingMap.getTargetMetersPerPixel()
-				var radius = BingMap.getTargetZoom() / BingMap.getZoomRange().max * MaxZoomRadius;
-
-				config.heatLayer.SetOptions({ radius: radius });
+			function rescaleHeatPoints() {
+				var MaxZoomRadius = (PresentationDescription.RadiusUnits == "pixels") ? PresentationDescription.Radius : PresentationDescription.Radius / BingMap.getTargetMetersPerPixel();
+				config.heatLayer.SetOptions({ radius: BingMap.getTargetZoom() / BingMap.getZoomRange().max * MaxZoomRadius });
 			}
-			function loadData() {
-				var FetchXml = "";
+			function getFetchXml() {
 				if (parent.effectiveFetchXml && Object.prototype.toString.call(parent.effectiveFetchXml) == "[object HTMLDivElement]") {  // Web
-					FetchXml = buildFetchXML(parent.effectiveFetchXml.getAttribute("value"));
+					buildFetchXML(parent.effectiveFetchXml.getAttribute("value"), loadData);
 				}
 				else if (parent.$find("crmGrid")) {  // Outlook
-					FetchXml = buildFetchXML(parent.$find("crmGrid").GetParameter("effectiveFetchXml"));
+					buildFetchXML(parent.$find("crmGrid").GetParameter("effectiveFetchXml"), loadData);
 				}
-				else  // Retrieves the FetchXml using the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards, but it also makes a good fallback if the unsupported methods fail.
-				{
-					FetchXml = GetFetchXmlFromViewId(config.viewId);
+				else {  // Retrieves the FetchXml using the provided viewId.  This is the only method that is technically supported, but it does not maintain user-filtered results.  This was added to support "Chart-Only" subgrids on Forms and Dashboards, but it also makes a good fallback if the unsupported methods fail.
+					dd_CRMService.Retrieve(viewId, "SavedQuery", function (result) { loadData(result.FetchXml); }, function (error) { });
 				}
-
-				dd_CRMService.RetrieveFetchXml(FetchXml, getPinData, function(error) { ShowErrorOnMap("There was a problem opening the record list"); });
 			}
-			function buildFetchXML(fetchXMLString) {
+			function loadData(fetchXml) {
+				dd_CRMService.RetrieveFetchXml(FetchXml, getPinData, function (error) { });
+			}
+			function buildFetchXML(fetchXMLString, callback) {
 				var result = DataDescription.fetchXML;
-
-				// TODO: use XPATH for this (dd_xmlparser.js)
-				// 1. remove all attribute nodes
-				// 2. add our address attributes
-				// everything else stays the same, except maybe page/count
 
 				if (!PresentationDescription.ShowAllRecords) {  // If showallrecords is true, then it will already be defaulted to "count=5000" and "page=1"
 					result = result.replace('count="250"', fetchXMLString.match(/count=".*?"/));
@@ -148,54 +132,34 @@
 				}
 
 				result = result.replace("<order/>", fetchXMLString.match(/<order.*?\/>/));
-				result = result.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));  // TODO: add support for link-entity filters
+				result = result.replace("<filter/>", fetchXMLString.match(/<filter.*<\/filter>/));  // TODO: add proper support for link-entity filters
 
-				return result;
-			}
-			function GetFetchXmlFromViewId(viewId) {
-				var result = dd_CRMService.Retrieve(viewId, "SavedQuery", null, null);
-				if (result.FetchXml)
-					return result.FetchXml;
-				else
-					ShowErrorOnMap("There was a problem reading the record list");
+				callback(result);
 			}
 			function getPinData(entityList) {
-				var pinData = function pinData(crmEntity) {  // Class to store pinData as it gets passed around
-					this.Name = crmEntity[DataDescription.NameField];
-					this.Id = crmEntity.id;
-					this.Address = crmEntity.compositeAddress;
-					this.EntityType = crmEntity.entityTypeName;
-					this.latitude = crmEntity[DataDescription.LatitudeField];
-					this.longitude = crmEntity[DataDescription.LongitudeField];
-					this.weightValue = crmEntity[DataDescription.NumericField] || 0;
-					this.retryCount = 0;
-				};
-
-				geocodeTotal = entityList.length;
-				for (var e in entityList) {
-					var entity = entityList[e];
-					entity.compositeAddress = [entity[DataDescription.AddressField], entity[DataDescription.CityField], entity[DataDescription.StateField], entity[DataDescription.CountryField], entity[DataDescription.PostCodeField]].filter(function (a) { return a != undefined; }).join(", ");
-
-					if (entity[DataDescription.LongitudeField] && entity[DataDescription.LatitudeField]) {  // We already have the coordinates
-						allPins.push(new pinData(entity));
+				config.geocodeTotal = entityList.length;
+				for (var i in entityList) {
+					var entity = new pinData(entityList[i]);
+					if (entity.latitude && entity.longitude) {  // We already have the coordinates
+						allPins.push(entity);
 						geocodeComplete();
 					}
-					else if (entity.compositeAddress) {  // Must Perform Geocoding
-						sendGeocodeRequest(entity.compositeAddress, new pinData(entity));
+					else if (entity.Address) {  // Must Perform Geocoding
+						sendGeocodeRequest(entity);
 					}
 					else {  // Skip records with no address details
 						geocodeComplete();
 					}
 				}
 			}
-			function sendGeocodeRequest(searchString, pinData) {
-				if (!config.searchManager) {
-					setTimeout(sendGeocodeRequest, 10, searchString, pinData);
+			function sendGeocodeRequest(pinData) {
+				if (!config.searchManager || config.concurrentRequestCount >= config.maxConcurrentRequests) {
+					setTimeout(sendGeocodeRequest, 10, pinData);
 					return;
 				}
-
+				config.concurrentRequestCount += 1;
 				config.searchManager.geocode({
-					where: searchString,
+					where: pinData.Address,
 					count: 1,
 					callback: onGeocodeSuccess,
 					errorCallback: onGeocodeFail,
@@ -203,39 +167,33 @@
 				});
 			}
 			function onGeocodeSuccess(result, pinData) {
-				var CRMRecord = function CRMRecord(latitude, longitude) {  // Class for records to be updated
-					this[DataDescription.LatitudeSchemaName] = latitude;
-					this[DataDescription.LongitudeSchemaName] = longitude;
-				}
-				var topResult = result.results && result.results[0];
-				if (topResult) {
-					pinData.latitude = topResult.location.latitude;
-					pinData.longitude = topResult.location.longitude;
+				if (config.concurrentRequestCount--, (result.results && result.results[0])) {
+					pinData.latitude = result.results[0].location.latitude;
+					pinData.longitude = result.results[0].location.longitude;
 					allPins.push(pinData);
 
-					if (PresentationDescription.EnableCaching) {  // Update the record with discovered coordinates
-						dd_CRMService.Update(pinData.Id, new CRMRecord(pinData.latitude, pinData.longitude), DataDescription.EntitySchemaName, function() { }, function() { });
-					}
+					PresentationDescription.EnableCaching && dd_CRMService.Update(pinData.Id, new CRMRecord(pinData.latitude, pinData.longitude), DataDescription.EntitySchemaName, function () { }, function () { });  // Update the record with discovered coordinates
 				}
 				geocodeComplete();
 			}
 			function onGeocodeFail(result) {
-				if (result.userData.retryCount < 3) {
-					setTimeout(sendGeocodeRequest, 100, result.where, result.userData);  // Short delay and retry the failed record.
+				if (config.concurrentRequestCount--, (result.request.userData.retryCount++ < config.maxRetryCount)) {
+					setTimeout(sendGeocodeRequest, config.retryDelay, result.request.userData);  // Short delay and retry the failed record.
 					return;
 				}
 
 				geocodeComplete();
 			}
 			function geocodeComplete() {
-				if (++geocodeCompleted >= geocodeTotal) {
+				if (++config.geocodeCompleted >= config.geocodeTotal) {
 					if (PresentationDescription.MapType == 1) {
 						addPinsToMap();
 					}
 					else if (PresentationDescription.MapType == 2) {
 						generateHeat();
 					}
-					BingMap.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(allPins) });
+
+					allPins.length && BingMap.setView({ bounds: Microsoft.Maps.LocationRect.fromLocations(allPins) });
 				}
 			}
 			function addPinsToMap() {
@@ -246,29 +204,23 @@
 				config.clusterLayer.SetData(allPins);
 			}
 			function createPin(data, pinInfo) {
-				var pin = {};
-				pin.pin = new Microsoft.Maps.Pushpin(pinInfo.center);
-				pin.infobox = new Microsoft.Maps.Infobox(
-					pinInfo.center,
-					{
+				return {
+					pin: new Microsoft.Maps.Pushpin(pinInfo.center),
+					infobox: new Microsoft.Maps.Infobox(
+					pinInfo.center, {
 						title: data.Name,
-						pushpin: pin.pin,
+						pushpin: this.pin,
 						description: data.Address,
-						titleClickHandler: function() { Xrm.Utility.openEntityForm(data.EntityType, data.Id); }
-					});
-
-				return pin;
+						titleClickHandler: function () { Xrm.Utility.openEntityForm(data.EntityType, data.Id); }
+					})
+				};
 			}
 			function createClusteredPin(clusterInfo) {
-				var pin = { Description: "" };
-
-				for (var i in clusterInfo.dataIndices) {
-					pin.Description += '<a href="#" onclick="javascript:Xrm.Utility.openEntityForm(\'' + config.entityTypeName + '\',\'' + allPins[clusterInfo.dataIndices[i]].Id + '\');">' + allPins[clusterInfo.dataIndices[i]].Name + "</a><br />";
-				}
-				pin.pin = new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() });
-				pin.infobox = new Microsoft.Maps.Infobox(clusterInfo.center, { title: PresentationDescription.ClusterTitle, pushpin: pin.pin, description: pin.Description });
-
-				return pin;
+				return {
+					Description: clusterInfo.dataIndices.map(function (i) { '<a href="#" onclick="javascript:Xrm.Utility.openEntityForm(\'' + config.entityTypeName + '\',\'' + allPins[i].Id + '\');">' + allPins[i].Name + "</a><br />"; }).join(""),
+					pin: new Microsoft.Maps.Pushpin(clusterInfo.center, { text: clusterInfo.dataIndices.length.toString() }),
+					infobox: new Microsoft.Maps.Infobox(clusterInfo.center, { title: PresentationDescription.ClusterTitle, pushpin: this.pin, description: Description })
+				};
 			}
 			function generateHeat() {
 				if (!config.heatLayer) {
@@ -276,13 +228,9 @@
 					return;
 				}
 
-				calculateIntensity();
-				config.heatLayer.SetPoints(allPins);
-			}
-			function calculateIntensity() {
 				var Max, Min, NegativeOffset = 0;
 				if (PresentationDescription.HeatMapType === 2 && PresentationDescription.IntensityRange === 1) {  // Calculated Range
-					var weightArray = allPins.map(function(x) { return x.weightValue; });
+					var weightArray = allPins.map(function (pin) { return pin.weightValue; });
 					if (PresentationDescription.IntensityCalculation == 2) {  // Standard Deviation
 						var STDev = stdDev.getStandardDev(weightArray, 2);
 						var Mean = stdDev.getAverage(weightArray, 2);
@@ -291,10 +239,10 @@
 						Min = Mean - (STDev * PresentationDescription.Deviations);
 					}
 					else {  // Full Range
-						Max = Math.max.apply(null, weightArray);
-						Min = Math.min.apply(null, weightArray)
+						Max = Math.max.apply(Math, weightArray);
+						Min = Math.min.apply(Math, weightArray);
 					}
-					if (Min < 0) {  // We now support displaying negative values on the heatmap, sooo...  TODO: add a config option to actually display them or not
+					if (Min < 0) {  // We now support displaying "negative" values on the heatmap, sooo...  TODO: add a config option to actually display them or not
 						NegativeOffset = Math.abs(Min);
 						Max += NegativeOffset;
 						Min = 0;
@@ -305,31 +253,17 @@
 					Min = PresentationDescription.MinValue;
 				}
 
-				for (var i = 0; i < allPins.length; i++) {  // Set specific intensity values for use in Heat Map
+				for (var i in allPins) {  // Set specific intensity values for use in Heat Map
 					var pinIntensity = ((allPins[i].weightValue + NegativeOffset - Min) / (Max - Min)).toFixed(2);
 					pinIntensity = (pinIntensity <= 0) ? 0.01 : pinIntensity;  // Safety net
 					pinIntensity = (pinIntensity > 1) ? 1 : pinIntensity;  // Safety net
 					allPins[i].intensity = pinIntensity;
 				}
-			}
-			function ShowErrorOnMap(errorMessage) {
-				errorMessage = errorMessage || "There was a problem loading this map.";
-				if (BingMap) {
-					if (BingMap.entities) {
-						BingMap.entities.clear();
-					}
-					var containerDiv = document.createElement("div");
-					containerDiv.style.cssText = "position:absolute; width:100%; top:50%; text-Align:center";
 
-					var errorDiv = document.createElement("div");
-					errorDiv.innerHTML = "\u003ch2\u003eSorry :(\u003c/h2\u003e" + errorMessage + "\u003cbr/\u003ePlease contact your system administrator";
-					errorDiv.style.cssText = "background: #f8f7f5; padding:10px; color: #000;";
-					containerDiv.appendChild(errorDiv);
-					BingMap.getRootElement().appendChild(containerDiv);
-				}
+				config.heatLayer.SetPoints(allPins);
 			}
 			function parseQueryParameters(query) {
-				var parametersDictionary = new Array();
+				var parametersDictionary = [];
 				var parameters = query.split('&');
 				for (var i in parameters) {
 					var keyValuePair = parameters[i].split('=');
@@ -337,37 +271,44 @@
 				}
 				return parametersDictionary;
 			}
-			var stdDev = (function(stdDev) {  // Helper for working with standard deviation
+			var CRMRecord = function CRMRecord(latitude, longitude) {  // Class for records to be updated
+				this[DataDescription.LatitudeSchemaName] = latitude;
+				this[DataDescription.LongitudeSchemaName] = longitude;
+			};
+			var pinData = function pinData(entity) {  // Class to store pinData as it gets passed around
+				this.Name = entity[DataDescription.NameField];
+				this.Id = entity.id;
+				this.Address = [entity[DataDescription.AddressField], entity[DataDescription.CityField], entity[DataDescription.StateField], entity[DataDescription.CountryField], entity[DataDescription.PostCodeField]].filter(function (a) { return a != undefined; }).join(", ");
+				this.EntityType = entity.logicalName;
+				this.latitude = entity[DataDescription.LatitudeField];
+				this.longitude = entity[DataDescription.LongitudeField];
+				this.weightValue = entity[DataDescription.NumericField] || 0;
+				this.retryCount = 0;
+			};
+			var stdDev = (function (stdDev) {  // Helper for working with standard deviation
 				stdDev.getStandardDev = function getStandardDev(numArr, numOfDec) {
-					var stdDeviation = Math.sqrt(getVariance(numArr, numOfDec));
-					return getNumWithSetDec(stdDeviation, numOfDec);
+					return getNumWithSetDec(Math.sqrt(getVariance(numArr, numOfDec)), numOfDec);
 				};
 				stdDev.getAverage = function getAverage(numArr, numOfDec) {
-					var i = numArr.length, sum = 0;
-					while (i--) {
-						sum += numArr[i];
-					}
+					var sum = numArr.reduce(function (a, b) { return a + b; });
 					return getNumWithSetDec((sum / numArr.length), numOfDec);
-				}
+				};
 				function getNumWithSetDec(num, numOfDec) {
 					var pow10s = Math.pow(10, numOfDec || 0);
 					return (numOfDec) ? Math.round(pow10s * num) / pow10s : num;
 				}
 				function getVariance(numArr, numOfDec) {
-					var avg = stdDev.getAverage(numArr, numOfDec), i = numArr.length, v = 0;
-					while (i--) {
-						v += Math.pow((numArr[i] - avg), 2);
-					}
-					v /= numArr.length;
-					return getNumWithSetDec(v, numOfDec);
+					var avg = stdDev.getAverage(numArr, numOfDec);
+					var v = numArr.reduce(function (a, b) { return a + Math.pow(b - avg, 2); }, 0);
+					return getNumWithSetDec(v / numArr.length, numOfDec);
 				}
 				return stdDev;
-			}(stdDev || {}))
+			}(stdDev || {}));
 			return chartMap;
 		}(chartMap || {}));
 	</script>
 </head>
 <body onload="chartMap.init()" style="overflow: hidden;">
-	<div class="MicrosoftMap BingTheme MapTypeId_m medium" id="BingMap"></div>
+	<div class="MicrosoftMap BingTheme MapTypeId_m medium" id="BingMapDiv"></div>
 </body>
 </html>
