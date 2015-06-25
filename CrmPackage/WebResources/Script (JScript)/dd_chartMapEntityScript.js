@@ -62,7 +62,7 @@
 	chartMap.SetApiKeyDisplayRule = function SetApiKeyDisplayRule() {
 		// This button only applies to CRM Online.  OnPrem users should use the System Settings page.
 		if (Xrm.Page.context.isCrmOnline) {
-			Xrm.Page.context.isCrmOnline();  // Gotta love undocumented features!
+			return Xrm.Page.context.isCrmOnline();  // Gotta love undocumented features!
 		}
 		else {
 			return Xrm.Page.context.getClientUrl().indexOf(".dynamics.com") > -1;
