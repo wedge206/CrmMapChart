@@ -15,13 +15,40 @@
 	}
 
 	chartMap.onSave = function onSave() {
+		Xrm.Page.setFormNotification("NOTE: You must publish changes for new or updated maps to take affect.");
+	}
+
+	chartMap.publishChanges = function publishChanges(entityTypeName) {  // Called from the ribbon button
+
+		var req = new XMLHttpRequest();
+		req.open("POST", Xrm.Page.context.getClientUrl() + "/XRMServices/2011/Organization.svc/web", true)
+		req.setRequestHeader("Accept", "application/xml, text/xml, */*");
+		req.setRequestHeader("Content-Type", "text/xml; charset=utf-8");
+		req.setRequestHeader("SOAPAction", "http://schemas.microsoft.com/xrm/2011/Contracts/Services/IOrganizationService/Execute");
+
+		req.send("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\"> \
+							<s:Body> \
+								<Execute xmlns=\"http://schemas.microsoft.com/xrm/2011/Contracts/Services\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"> \
+									<request i:type=\"b:PublishXmlRequest\" xmlns:a=\"http://schemas.microsoft.com/xrm/2011/Contracts\" xmlns:b=\"http://schemas.microsoft.com/crm/2011/Contracts\"> \
+										<a:Parameters xmlns:c=\"http://schemas.datacontract.org/2004/07/System.Collections.Generic\"> \
+											<a:KeyValuePairOfstringanyType> \
+												<c:key>ParameterXml</c:key> \
+												<c:value i:type=\"d:string\" xmlns:d=\"http://www.w3.org/2001/XMLSchema\">&lt;importexportxml&gt;&lt;entities&gt;&lt;entity&gt;" + entityTypeName || Xrm.Page.getAttribute("dd_entity").getValue() + "&lt;/entity&gt;&lt;/entities&gt;&lt;/importexportxml&gt;</c:value> \
+											</a:KeyValuePairOfstringanyType> \
+										</a:Parameters> \
+										<a:RequestId i:nil=\"true\" /> \
+										<a:RequestName>PublishXml</a:RequestName> \
+									</request> \
+								</Execute> \
+							</s:Body> \
+						</s:Envelope>");
 	}
 
 	chartMap.setBingMapsKey = function setBingMapsKey() {  // Called from the ribbon button
 		RetrieveApiKey(function (org) {
 			var oldKey = org.BingMapsApiKey || "";
 			var newKey = prompt("Enter your Bing Maps API Key:", oldKey);  // Would really like to have an Xrm.Utility.Prompt() ...
-			if (newKey != null && newKey !== oldKey) {
+			if (newKey && newKey !== oldKey) {
 				Xrm.Utility.confirmDialog(
 					"This will update the saved key from: " + oldKey + " to: " + newKey + "\n\n  Are you Sure?",
 					function () {
@@ -34,7 +61,12 @@
 
 	chartMap.SetApiKeyDisplayRule = function SetApiKeyDisplayRule() {
 		// This button only applies to CRM Online.  OnPrem users should use the System Settings page.
-		return Xrm.Page.context.getClientUrl().indexOf("crm.dynamics.com") > -1;
+		if (Xrm.Page.context.isCrmOnline) {
+			Xrm.Page.context.isCrmOnline();  // Gotta love undocumented features!
+		}
+		else {
+			return Xrm.Page.context.getClientUrl().indexOf(".dynamics.com") > -1;
+		}
 	}
 
 	chartMap.enableCaching_onChange = function enableCaching_onChange() {
